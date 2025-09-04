@@ -1,0 +1,447 @@
+// src/utils/pdfUtils.js
+export const pdfUtils = {
+  
+    // Validar que los elementos necesarios existen
+    validarElementosParaPDF: () => {
+      const elementos = {
+        'documento': document.querySelector('[ref="documento"]') || document.getElementById('hoja-vida-completa'),
+        'hoja1': document.getElementById('hoja1-container') || document.querySelector('.carta:nth-child(1)'),
+        'hoja2': document.getElementById('hoja2-container') || document.querySelector('.carta:nth-child(2)'),
+        'hoja3': document.getElementById('hoja3-container') || document.querySelector('.carta:nth-child(3)')
+      }
+  
+      const errores = []
+      const warnings = []
+  
+      Object.entries(elementos).forEach(([nombre, elemento]) => {
+        if (!elemento) {
+          errores.push(`❌ ${nombre.toUpperCase()}: No encontrado`)
+        } else {
+          // Verificar contenido
+          const tieneContenido = elemento.innerHTML.trim().length > 100
+          if (!tieneContenido) {
+            warnings.push(`⚠️ ${nombre.toUpperCase()}: Parece estar vacío`)
+          }
+        }
+      })
+  
+      return {
+        valido: errores.length === 0,
+        elementos,
+        errores,
+        warnings,
+        resumen: `${Object.keys(elementos).length - errores.length}/${Object.keys(elementos).length} elementos encontrados`
+      }
+    },
+  
+    // Preparar documento para PDF
+    prepararDocumentoParaPDF: (elemento) => {
+      if (!elemento) return null
+  
+      // Clonar el elemento para no afectar el DOM original
+      const clone = elemento.cloneNode(true)
+      
+      // Ocultar elementos no deseados
+      const elementosOcultar = clone.querySelectorAll(`
+        .no-imprimir,
+        button:not(.incluir-en-pdf),
+        .boton-guardar,
+        .boton-actualizar,
+        .boton-cerrar,
+        input[type="file"],
+        .btn-recordatorio,
+        .pdf-controls,
+        .preview-modal
+      `)
+      
+      elementosOcultar.forEach(el => {
+        if (el) el.style.display = 'none'
+      })
+  
+      // Optimizar tablas
+      const tablas = clone.querySelectorAll('table')
+      tablas.forEach(tabla => {
+        tabla.style.width = '100%'
+        tabla.style.borderCollapse = 'collapse'
+        tabla.style.fontSize = '11px'
+        
+        // Asegurar bordes visibles
+        const celdas = tabla.querySelectorAll('td, th')
+        celdas.forEach(celda => {
+          celda.style.border = '1px solid #ccc'
+          celda.style.padding = '4px'
+        })
+      })
+  
+      // Optimizar inputs para que se vean mejor en PDF
+      const inputs = clone.querySelectorAll('input[type="text"], input[type="email"], textarea, select')
+      inputs.forEach(input => {
+        input.style.border = '1px solid #666'
+        input.style.background = 'transparent'
+        input.style.fontSize = '11px'
+        input.style.padding = '2px 4px'
+        
+        // Si el input tiene valor, mostrarlo claramente
+        if (input.value) {
+          input.style.fontWeight = 'bold'
+          input.style.color = '#000'
+        }
+      })
+  
+      // Optimizar checkboxes y radios
+      const checkboxes = clone.querySelectorAll('input[type="checkbox"], input[type="radio"]')
+      checkboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          // Crear una marca visual más clara
+          const marca = document.createElement('span')
+          marca.innerHTML = checkbox.type === 'checkbox' ? '☑' : '⦿'
+          marca.style.fontSize = '14px'
+          marca.style.fontWeight = 'bold'
+          checkbox.parentNode.insertBefore(marca, checkbox)
+          checkbox.style.display = 'none'
+        } else {
+          const marca = document.createElement('span')
+          marca.innerHTML = checkbox.type === 'checkbox' ? '☐' : '○'
+          marca.style.fontSize = '14px'
+          checkbox.parentNode.insertBefore(marca, checkbox)
+          checkbox.style.display = 'none'
+        }
+      })
+  
+      // Ajustar imágenes
+      const imagenes = clone.querySelectorAll('img')
+      imagenes.forEach(img => {
+        img.style.maxWidth = '100%'
+        img.style.height = 'auto'
+        img.style.display = 'block'
+      })
+  
+      return clone
+    },
+  
+    // Configuraciones predefinidas para diferentes tipos de PDF
+    configuraciones: {
+      hojaCompleta: {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        filename: "hoja-de-vida-completa.pdf",
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          scrollX: 0,
+          scrollY: 0,
+          width: 816,
+          height: 1056
+        },
+        jsPDF: { 
+          unit: "in", 
+          format: "letter", 
+          orientation: "portrait",
+          compress: true
+        },
+        pagebreak: { 
+          mode: ["avoid-all", "css", "legacy"],
+          before: ".carta:not(:first-child)",
+          avoid: ".section, .form-row"
+        }
+      },
+      
+      paginaIndividual: {
+        margin: [0.5, 0.5, 0.5, 0.5],
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: { 
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff"
+        },
+        jsPDF: { 
+          unit: "in", 
+          format: "letter", 
+          orientation: "portrait"
+        },
+        pagebreak: { 
+          mode: ["css"],
+          avoid: ".section"
+        }
+      },
+  
+      altaCalidad: {
+        margin: [0.3, 0.3, 0.3, 0.3],
+        image: { type: "png", quality: 1.0 },
+        html2canvas: { 
+          scale: 3,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: "#ffffff",
+          dpi: 300
+        },
+        jsPDF: { 
+          unit: "in", 
+          format: "letter", 
+          orientation: "portrait",
+          compress: false
+        }
+      }
+    },
+  
+    // Generar CSS específico para PDF
+    generarCSSParaPDF: () => {
+      return `
+        <style id="pdf-styles">
+          @media print {
+            * {
+              -webkit-print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              box-sizing: border-box !important;
+            }
+            
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: white !important;
+              font-family: Arial, sans-serif !important;
+            }
+            
+            .carta {
+              width: 8.5in !important;
+              height: 11in !important;
+              padding: 0.5in !important;
+              margin: 0 !important;
+              page-break-after: always !important;
+              box-sizing: border-box !important;
+              background: white !important;
+              overflow: hidden !important;
+            }
+            
+            .carta:last-child {
+              page-break-after: auto !important;
+            }
+            
+            .no-imprimir,
+            button,
+            input[type="file"],
+            .boton-guardar,
+            .boton-actualizar,
+            .boton-cerrar,
+            .btn-recordatorio,
+            .pdf-controls {
+              display: none !important;
+            }
+            
+            .section {
+              page-break-inside: avoid !important;
+              margin-bottom: 12px !important;
+            }
+            
+            .section-title {
+              font-weight: bold !important;
+              margin-bottom: 8px !important;
+              background-color: #f0f0f0 !important;
+              padding: 4px 8px !important;
+              border-radius: 4px !important;
+            }
+            
+            table {
+              width: 100% !important;
+              border-collapse: collapse !important;
+              font-size: 10px !important;
+              page-break-inside: auto !important;
+            }
+            
+            table th,
+            table td {
+              border: 1px solid #333 !important;
+              padding: 3px !important;
+              text-align: left !important;
+              vertical-align: top !important;
+            }
+            
+            table th {
+              background-color: #f5f5f5 !important;
+              font-weight: bold !important;
+            }
+            
+            .form-control {
+              border: 1px solid #666 !important;
+              background: transparent !important;
+              padding: 2px 4px !important;
+              font-size: 11px !important;
+              width: 100% !important;
+              box-sizing: border-box !important;
+            }
+            
+            .form-row {
+              display: flex !important;
+              flex-wrap: wrap !important;
+              margin-bottom: 8px !important;
+              page-break-inside: avoid !important;
+            }
+            
+            .form-group {
+              margin-bottom: 6px !important;
+              flex: 1 !important;
+            }
+            
+            .form-group label {
+              display: block !important;
+              font-weight: bold !important;
+              font-size: 9px !important;
+              margin-bottom: 2px !important;
+              color: #333 !important;
+            }
+            
+            .checkbox-group {
+              display: inline-flex !important;
+              align-items: center !important;
+              margin-right: 8px !important;
+            }
+            
+            .imagen {
+              max-width: 100px !important;
+              height: auto !important;
+              border: 1px solid #ccc !important;
+            }
+            
+            h1, h2, h3 {
+              page-break-after: avoid !important;
+              color: #000 !important;
+            }
+            
+            p {
+              font-size: 11px !important;
+              line-height: 1.3 !important;
+              margin: 4px 0 !important;
+            }
+          }
+        </style>
+      `
+    },
+  
+    // Aplicar estilos temporales para PDF
+    aplicarEstilosPDF: () => {
+      const estilosExistentes = document.getElementById('pdf-styles')
+      if (estilosExistentes) {
+        estilosExistentes.remove()
+      }
+  
+      const estilos = document.createElement('div')
+      estilos.innerHTML = pdfUtils.generarCSSParaPDF()
+      document.head.appendChild(estilos.firstElementChild)
+    },
+  
+    // Remover estilos temporales
+    removerEstilosPDF: () => {
+      const estilos = document.getElementById('pdf-styles')
+      if (estilos) {
+        estilos.remove()
+      }
+    },
+  
+    // Función de debugging para PDF
+    debugPDF: (elemento) => {
+      console.group('🔍 DEBUG PDF')
+      
+      // Validar elementos
+      const validacion = pdfUtils.validarElementosParaPDF()
+      console.log('📋 Validación:', validacion)
+      
+      // Información del elemento principal
+      if (elemento) {
+        console.log('📄 Elemento principal:', elemento)
+        console.log('📏 Dimensiones:', {
+          width: elemento.offsetWidth,
+          height: elemento.offsetHeight,
+          scrollWidth: elemento.scrollWidth,
+          scrollHeight: elemento.scrollHeight
+        })
+        
+        // Contar elementos importantes
+        const stats = {
+          secciones: elemento.querySelectorAll('.section').length,
+          tablas: elemento.querySelectorAll('table').length,
+          inputs: elemento.querySelectorAll('input').length,
+          cartas: elemento.querySelectorAll('.carta').length,
+          elementosOcultos: elemento.querySelectorAll('.no-imprimir').length
+        }
+        console.log('📊 Estadísticas:', stats)
+      }
+      
+      console.groupEnd()
+      return validacion
+    },
+  
+    // Función para obtener configuración optimizada según el contenido
+    obtenerConfiguracionOptima: (elemento, tipo = 'hojaCompleta') => {
+      const config = { ...pdfUtils.configuraciones[tipo] }
+      
+      if (elemento) {
+        // Ajustar escala según el contenido
+        const tablas = elemento.querySelectorAll('table')
+        if (tablas.length > 5) {
+          config.html2canvas.scale = 1.8 // Reducir escala si hay muchas tablas
+        }
+        
+        // Ajustar calidad según el tamaño
+        const tamaño = elemento.scrollHeight
+        if (tamaño > 3000) {
+          config.image.quality = 0.95 // Reducir calidad para documentos grandes
+        }
+      }
+      
+      return config
+    }
+  }
+  
+  // Función helper para uso directo en componentes
+  export const validarYGenerarPDF = async (elemento, opciones = {}) => {
+    try {
+      // Debug inicial
+      const debug = pdfUtils.debugPDF(elemento)
+      
+      if (!debug.valido) {
+        throw new Error(`Elementos faltantes: ${debug.errores.join(', ')}`)
+      }
+      
+      if (debug.warnings.length > 0) {
+        console.warn('⚠️ Advertencias:', debug.warnings)
+      }
+      
+      // Aplicar estilos para PDF
+      pdfUtils.aplicarEstilosPDF()
+      
+      // Preparar elemento
+      const elementoPreparado = pdfUtils.prepararDocumentoParaPDF(elemento)
+      
+      // Obtener configuración óptima
+      const config = pdfUtils.obtenerConfiguracionOptima(elemento, opciones.tipo)
+      
+      // Merge con opciones personalizadas
+      const configFinal = { ...config, ...opciones }
+      
+      console.log('⚙️ Configuración final:', configFinal)
+      
+      return {
+        elemento: elementoPreparado,
+        configuracion: configFinal,
+        valido: true
+      }
+      
+    } catch (error) {
+      console.error('❌ Error en validación:', error)
+      return {
+        elemento: null,
+        configuracion: null,
+        valido: false,
+        error: error.message
+      }
+    } finally {
+      // Limpiar estilos temporales después de un delay
+      setTimeout(() => {
+        pdfUtils.removerEstilosPDF()
+      }, 1000)
+    }
+  }
+  
+  export default pdfUtils
