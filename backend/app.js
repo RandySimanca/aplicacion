@@ -26,7 +26,7 @@ app.use(express.json());
 
 // --- Conexión MongoDB ---
 mongoose
-  .connect(process.env.MONGO_URI, {
+  .connect(process.env.MONGODB_URI, {
     useNewUrlParser: true,
     useUnifiedTopology: true,
   })
@@ -69,3 +69,4 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 export default app;
+
