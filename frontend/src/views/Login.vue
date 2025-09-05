@@ -75,6 +75,16 @@ const loading = ref(false);
 const modoRegistro = ref(false);
 const router = useRouter();
 
+// ✅ SOLUCIÓN: URL dinámica que funciona en desarrollo y producción
+const getApiUrl = () => {
+  // Si estamos en desarrollo local
+  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+    return 'http://localhost:4000'; // Tu puerto de desarrollo
+  }
+  // Si estamos en producción (Heroku), usar la misma URL del frontend
+  return window.location.origin;
+};
+
 const handleLogin = async () => {
   error.value = "";
   if (!email.value || !password.value) {
@@ -84,7 +94,8 @@ const handleLogin = async () => {
 
   loading.value = true;
   try {
-    const res = await axios.post("http://localhost:3000/api/login", {
+    // ✅ CAMBIO PRINCIPAL: Usar URL dinámica
+    const res = await axios.post(`${getApiUrl()}/api/login`, {
       email: email.value,
       password: password.value,
     });
@@ -93,10 +104,11 @@ const handleLogin = async () => {
     localStorage.setItem("token", token);
     localStorage.setItem("usuario", JSON.stringify(usuario));
     const hojaStore = useHojaVidaStore();
-    await hojaStore.cargarHojaDeVida(); // ✅ Carga datos antes de mostrar el panel
+    await hojaStore.cargarHojaDeVida();
 
     router.push(usuario.roles.includes("admin") ? "/admin" : "/panel/Hoja1");
   } catch (e) {
+    console.error('Error de login:', e); // Para debugging
     error.value =
       e.response?.data?.mensaje || "Error de conexión: " + e.message;
   } finally {
@@ -113,16 +125,18 @@ const handleRegister = async () => {
 
   loading.value = true;
   try {
-    await axios.post("/usuarios", {
+    // ✅ CAMBIO: Usar URL dinámica también para registro
+    await axios.post(`${getApiUrl()}/api/usuarios`, {
       email: email.value,
       password: password.value,
       nombre: nombre.value,
-      roles: ["usuario"], // puedes asignar rol predeterminado
+      roles: ["usuario"],
     });
 
     modoRegistro.value = false;
     error.value = "Registro exitoso. Ahora puedes iniciar sesión.";
   } catch (e) {
+    console.error('Error de registro:', e); // Para debugging
     error.value = e.response?.data?.mensaje || "Error al registrar";
   } finally {
     loading.value = false;
@@ -188,6 +202,15 @@ form button:hover {
 .error {
   color: red;
   margin-top: 1rem;
+  font-weight: bold;
+}
+
+.toggle-btn {
+  background: none;
+  border: none;
+  color: #4f46e5;
+  text-decoration: underline;
+  cursor: pointer;
   font-weight: bold;
 }
 </style>
