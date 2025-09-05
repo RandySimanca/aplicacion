@@ -37,7 +37,7 @@
           <button @click="cerrarModal" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <p>Has alcanzado el límite máximo de <strong>{{ limiteDescargas }} descargas</strong> de tu hoja de vida en PDF en el modo gratuito.</p>
+          <p>Has alcanzado el límite máximo de <strong>{{ limiteDescargas }} descargas</strong> de tu hoja de vida en PDF para el usuario <strong>{{ nombre }}</strong>.</p>
           <p>Para continuar descargando, contacta al administrador del sistema:</p>
           
           <div class="contact-info">
@@ -56,7 +56,7 @@
           </div>
           
           <div class="codigo-desbloqueo">
-            <label for="codigo-input">Código de desbloqueo:</label>
+            <label for="codigo-input">Código de desbloqueo para {{ nombre }}:</label>
             <input 
               type="text" 
               id="codigo-input" 
@@ -70,16 +70,19 @@
             </button>
           </div>
           
-          <p class="note">El administrador podrá restablecer tu contador de descargas o proporcionarte un código de desbloqueo.</p>
+          <p class="note">El administrador podrá restablecer tu contador de descargas para este usuario específicamente.</p>
           
           <!-- Información de debug (solo en desarrollo) -->
           <div v-if="mostrarDebugInfo" class="debug-info">
             <p><strong>Info de Debug:</strong></p>
+            <p>Usuario: {{ nombre }}</p>
+            <p>ID Usuario: {{ usuarioId.substring(0, 12) }}...</p>
             <p>ID Dispositivo: {{ dispositivoId.substring(0, 12) }}...</p>
             <p>Descargas: {{ descargasUsadas }}/{{ limiteDescargas }}</p>
             <p>Estado: {{ estadoBloqueo }}</p>
             <p>Métodos activos: {{ metodosActivos }}</p>
             <p>Último guardado: {{ ultimoGuardado }}</p>
+            <p>Código específico: UNLOCK_{{ usuarioId.substring(5, 13) }}</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -93,12 +96,27 @@
 
     <!-- Contador visual -->
     <div class="contador-info" v-if="!limiteAlcanzado">
-      <span class="contador-text">Descargas disponibles: {{ descargasRestantes }}</span>
+      <span class="contador-text">{{ nombre }}: {{ descargasRestantes }} disponibles</span>
       <div class="contador-barra">
         <div 
           class="contador-progreso" 
           :style="{ width: `${(descargasUsadas / limiteDescargas) * 100}%` }"
         ></div>
+      </div>
+    </div>
+
+    <!-- Panel de administración (solo en desarrollo) -->
+    <div v-if="mostrarDebugInfo" class="admin-panel">
+      <h4>🛠️ Panel de Administración</h4>
+      <div class="admin-controls">
+        <button @click="mostrarEstadoCompleto" class="debug-btn">Ver Estado</button>
+        <button @click="forzarGuardado" class="debug-btn">Forzar Guardado</button>
+        <button @click="verificarPersistencia" class="debug-btn">Verificar Persistencia</button>
+        <button @click="limpiarUsuarioActual" class="debug-btn danger">Limpiar Usuario</button>
+      </div>
+      <div class="debug-input">
+        <input v-model="nuevoNombreUsuario" placeholder="Cambiar usuario..." />
+        <button @click="cambiarUsuarioActual" class="debug-btn">Cambiar</button>
       </div>
     </div>
   </div>
@@ -120,17 +138,19 @@ const route = useRoute();
 const router = useRouter();
 const usuarioStore = useUsuarioStore();
 
-// Sistema de bloqueo ULTRA PERSISTENTE
+// Sistema de bloqueo ESPECÍFICO POR USUARIO
 const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
 const codigoDesbloqueo = ref('');
-const dispositivoId = ref('');
+const usuarioId = ref(''); // ID específico del usuario
+const dispositivoId = ref(''); // ID del dispositivo
 const estadoBloqueo = ref('desbloqueado');
 const mostrarDebugInfo = ref(false);
 const metodosActivos = ref('');
 const ultimoGuardado = ref('');
+const nuevoNombreUsuario = ref('');
 
 let intervaloPersistencia = null;
 
@@ -139,22 +159,25 @@ const descargasRestantes = computed(() => limiteDescargas.value - descargasUsada
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
 onMounted(async () => {
+  // Cargar información del usuario
   const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
-  if (datos?.nombre) nombre.value = datos.nombre;
+  if (datos?.nombre) {
+    nombre.value = datos.nombre.trim();
+  }
   
-  // Inicializar sistema de persistencia ULTRA ROBUSTO
-  await inicializarSistemaPersistencia();
+  // Inicializar sistema de identificación DUAL (dispositivo + usuario)
+  await inicializarSistemaIdentificacion();
   
-  // Verificar y cargar estado de TODOS los métodos
-  await cargarEstadoCompleto();
+  // Verificar y cargar estado específico del usuario
+  await cargarEstadoUsuarioEspecifico();
   
-  // Iniciar verificación periódica cada 10 segundos
-  intervaloPersistencia = setInterval(verificarYMantenerPersistencia, 10000);
+  // Iniciar verificación periódica cada 15 segundos
+  intervaloPersistencia = setInterval(verificarYMantenerPersistencia, 15000);
 
   // Mostrar info debug en desarrollo
   if (import.meta.env.DEV) {
     mostrarDebugInfo.value = true;
-    console.log('🔧 Sistema de persistencia ultra robusto activado');
+    console.log('🔧 Sistema de bloqueo por usuario específico activado');
   }
 });
 
@@ -165,28 +188,35 @@ onUnmounted(() => {
 });
 
 // ================================
-// SISTEMA DE PERSISTENCIA MULTIPLE
+// SISTEMA DE IDENTIFICACIÓN DUAL
 // ================================
 
-async function inicializarSistemaPersistencia() {
-  // Generar ID único del dispositivo usando MÚLTIPLES técnicas
+async function inicializarSistemaIdentificacion() {
+  console.log('🆔 Inicializando identificación dual (dispositivo + usuario)...');
+  
+  // 1. Generar ID único del dispositivo (compartido entre usuarios)
   dispositivoId.value = await generarIdDispositivo();
   
-  console.log('🆔 ID del dispositivo generado:', dispositivoId.value);
+  // 2. Generar ID específico del usuario (único para cada usuario en el dispositivo)
+  usuarioId.value = await generarIdUsuario(nombre.value, dispositivoId.value);
+  
+  console.log('🆔 IDs generados:');
+  console.log('  Dispositivo:', dispositivoId.value);
+  console.log('  Usuario:', usuarioId.value);
+  console.log('  Para:', nombre.value);
 }
 
 async function generarIdDispositivo() {
-  const componentes = [];
+  // ID del dispositivo - IGUAL para todos los usuarios del mismo dispositivo
+  const componentesDispositivo = [];
   
   try {
-    // 1. Hardware y navegador
-    componentes.push(navigator.userAgent);
-    componentes.push(navigator.platform);
-    componentes.push(navigator.language);
-    componentes.push(screen.width + 'x' + screen.height + 'x' + screen.colorDepth);
-    componentes.push(new Date().getTimezoneOffset().toString());
+    componentesDispositivo.push(navigator.userAgent);
+    componentesDispositivo.push(navigator.platform);
+    componentesDispositivo.push(screen.width + 'x' + screen.height + 'x' + screen.colorDepth);
+    componentesDispositivo.push(new Date().getTimezoneOffset().toString());
     
-    // 2. Canvas fingerprinting FIJO
+    // Canvas fingerprinting para dispositivo
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     ctx.fillStyle = 'rgb(255,0,255)';
@@ -195,146 +225,151 @@ async function generarIdDispositivo() {
     ctx.fill();
     ctx.fillStyle = 'rgb(0,255,255)';
     ctx.font = '11pt Arial';
-    ctx.fillText('PDF-BLOCK-2024', 22, 50);
-    componentes.push(canvas.toDataURL());
+    ctx.fillText('DEVICE-ID-2024', 22, 50);
+    componentesDispositivo.push(canvas.toDataURL());
     
-    // 3. WebGL fingerprinting
+    // WebGL fingerprinting
     const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
     if (gl) {
-      componentes.push(gl.getParameter(gl.RENDERER) || '');
-      componentes.push(gl.getParameter(gl.VENDOR) || '');
+      componentesDispositivo.push(gl.getParameter(gl.RENDERER) || '');
+      componentesDispositivo.push(gl.getParameter(gl.VENDOR) || '');
     }
     
-    // 4. Características del navegador
-    componentes.push(navigator.hardwareConcurrency || '0');
-    componentes.push(navigator.deviceMemory || '0');
-    componentes.push(navigator.maxTouchPoints || '0');
-    componentes.push(window.devicePixelRatio || '1');
-    
-    // 5. Información de red (si está disponible)
-    if ('connection' in navigator) {
-      componentes.push(navigator.connection.effectiveType || '');
-    }
+    componentesDispositivo.push(navigator.hardwareConcurrency || '0');
+    componentesDispositivo.push(navigator.deviceMemory || '0');
+    componentesDispositivo.push(window.devicePixelRatio || '1');
     
   } catch (error) {
     console.warn('Error generando componentes del dispositivo:', error);
+    // Fallback básico
+    componentesDispositivo.push('fallback-device-id');
   }
   
-  // Crear hash consistente y único
+  const hash = await hashString(componentesDispositivo.join('|'));
+  return `DEVICE_${hash.substring(0, 16).toUpperCase()}`;
+}
+
+async function generarIdUsuario(nombreUsuario, idDispositivo) {
+  // ID específico del usuario - ÚNICO para cada usuario en cada dispositivo
+  const componentesUsuario = [];
+  
+  try {
+    // Información específica del usuario
+    componentesUsuario.push(nombreUsuario || 'anonimo');
+    componentesUsuario.push(idDispositivo); // Vincular al dispositivo
+    
+    // Timestamp de primera visita del usuario (específico por usuario)
+    componentesUsuario.push(getOrCreateUserTimestamp(nombreUsuario));
+    
+    // Información adicional para hacer más único
+    componentesUsuario.push(navigator.language);
+    componentesUsuario.push('USER_SPECIFIC');
+    
+    // Hash adicional basado en el nombre del usuario
+    const nombreHash = await hashString(nombreUsuario || 'default');
+    componentesUsuario.push(nombreHash);
+    
+  } catch (error) {
+    console.warn('Error generando componentes del usuario:', error);
+    componentesUsuario.push(`fallback-user-${nombreUsuario || 'anonimo'}`);
+  }
+  
+  const hash = await hashString(componentesUsuario.join('|'));
+  return `USER_${hash.substring(0, 16).toUpperCase()}`;
+}
+
+function getOrCreateUserTimestamp(nombreUsuario) {
+  // Crear clave específica para cada usuario
+  const key = `user_first_visit_${hashStringSynch(nombreUsuario || 'anonimo')}`;
+  let timestamp = localStorage.getItem(key);
+  
+  if (!timestamp) {
+    timestamp = Date.now().toString();
+    try {
+      localStorage.setItem(key, timestamp);
+    } catch (e) {
+      timestamp = Date.now().toString();
+    }
+  }
+  
+  return timestamp;
+}
+
+async function hashString(str) {
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  } catch (e) {
+    return hashStringSynch(str);
+  }
+}
+
+function hashStringSynch(str) {
   let hash = 0;
-  const texto = componentes.join('|');
-  for (let i = 0; i < texto.length; i++) {
-    const char = texto.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash;
   }
-  
-  // ID final con prefijo fijo
-  return `PDF_DEVICE_${Math.abs(hash).toString(36).toUpperCase()}`;
+  return Math.abs(hash).toString(16);
 }
 
 // ================================
-// MÉTODOS DE PERSISTENCIA MÚLTIPLES
+// MÉTODOS DE PERSISTENCIA POR USUARIO
 // ================================
 
-// 1. COOKIES ULTRA PERSISTENTES
-function guardarEnCookies(data) {
-  const metodosGuardado = [];
-  const expires = new Date();
-  expires.setTime(expires.getTime() + (365 * 10 * 24 * 60 * 60 * 1000)); // 10 años
+function obtenerClavesUsuario() {
+  // Generar claves específicas SOLO para este usuario
+  const baseKey = usuarioId.value;
   
-  const configuraciones = [
-    // Configuraciones principales
-    `pdf_lock_main=${encodeURIComponent(data)}; expires=${expires.toUTCString()}; path=/; SameSite=Strict`,
-    `pdf_lock_backup1=${encodeURIComponent(data)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`,
-    `pdf_lock_backup2=${encodeURIComponent(data)}; expires=${expires.toUTCString()}; path=/`,
+  return {
+    // LocalStorage - múltiples claves por usuario
+    localStorage: [
+      `pdf_lock_${baseKey}`,
+      `pdf_downloads_${baseKey}`,
+      `pdf_state_${baseKey}`,
+      `lock_${hashStringSynch(baseKey)}`,
+      btoa(`pdf_user_${baseKey}`).replace(/=/g, ''),
+    ],
     
-    // Con ID del dispositivo
-    `pdf_${dispositivoId.value}=${encodeURIComponent(data)}; expires=${expires.toUTCString()}; path=/`,
+    // Cookies - múltiples cookies por usuario
+    cookies: [
+      `pdf_user_${baseKey}`,
+      `downloads_${baseKey}`,
+      `state_${hashStringSynch(baseKey)}`,
+      `lock_${baseKey.substring(0, 10)}`,
+    ],
     
-    // Encoded y cifrado simple
-    `pdf_enc=${btoa(encodeURIComponent(data))}; expires=${expires.toUTCString()}; path=/`,
-    `pdf_rot13=${rot13(data)}; expires=${expires.toUTCString()}; path=/`,
-    
-    // Con dominio específico
-    `pdf_domain=${encodeURIComponent(data)}; expires=${expires.toUTCString()}; path=/; domain=${window.location.hostname}`,
-  ];
-  
-  configuraciones.forEach((config, index) => {
-    try {
-      document.cookie = config;
-      metodosGuardado.push(`cookie_${index}`);
-    } catch (e) {
-      console.warn(`Error guardando cookie ${index}:`, e);
-    }
-  });
-  
-  return metodosGuardado;
+    // IndexedDB - registros por usuario
+    indexedDB: [
+      `user_${baseKey}`,
+      `downloads_${baseKey}`,
+      `state_${hashStringSynch(baseKey)}`,
+    ]
+  };
 }
 
-function cargarDesdeCookies() {
-  const nombresACookies = [
-    'pdf_lock_main',
-    'pdf_lock_backup1', 
-    'pdf_lock_backup2',
-    `pdf_${dispositivoId.value}`,
-    'pdf_enc',
-    'pdf_rot13',
-    'pdf_domain'
-  ];
-  
-  for (const nombre of nombresACookies) {
-    let valor = getCookie(nombre);
-    if (valor) {
-      try {
-        // Decodificar según el tipo
-        if (nombre.includes('enc')) {
-          valor = decodeURIComponent(atob(valor));
-        } else if (nombre.includes('rot13')) {
-          valor = rot13(valor);
-        } else {
-          valor = decodeURIComponent(valor);
-        }
-        
-        const estado = JSON.parse(valor);
-        if (estado && typeof estado.usadas === 'number') {
-          console.log(`🍪 Estado cargado desde cookie: ${nombre}`);
-          return estado;
-        }
-      } catch (e) {
-        console.warn(`Error parseando cookie ${nombre}:`, e);
-      }
-    }
-  }
-  
-  return null;
-}
-
-// 2. LOCALSTORAGE CON MÚLTIPLES CLAVES
-function guardarEnLocalStorage(data) {
+// 1. LOCALSTORAGE ESPECÍFICO POR USUARIO
+function guardarEnLocalStorageUsuario(data) {
+  const claves = obtenerClavesUsuario().localStorage;
   const metodosGuardado = [];
-  const claves = [
-    'pdf_download_lock',
-    `pdf_lock_${dispositivoId.value}`,
-    'pdf_system_state',
-    btoa('pdf_hidden_state'),
-    'app_pdf_counter',
-    rot13('pdf_secret_state')
-  ];
   
   claves.forEach((clave, index) => {
     try {
       let valorAGuardar = data;
       
-      // Aplicar encoding según la clave
-      if (clave.includes(btoa('pdf_hidden_state'))) {
+      // Aplicar encoding variado
+      if (index === 1) {
         valorAGuardar = btoa(data);
-      } else if (clave === rot13('pdf_secret_state')) {
+      } else if (index === 2) {
         valorAGuardar = rot13(data);
       }
       
       localStorage.setItem(clave, valorAGuardar);
-      metodosGuardado.push(`ls_${index}`);
+      metodosGuardado.push(`ls_user_${index}`);
     } catch (e) {
       console.warn(`Error guardando en localStorage ${clave}:`, e);
     }
@@ -343,30 +378,24 @@ function guardarEnLocalStorage(data) {
   return metodosGuardado;
 }
 
-function cargarDesdeLocalStorage() {
-  const claves = [
-    'pdf_download_lock',
-    `pdf_lock_${dispositivoId.value}`,
-    'pdf_system_state',
-    btoa('pdf_hidden_state'),
-    'app_pdf_counter',
-    rot13('pdf_secret_state')
-  ];
+function cargarDesdeLocalStorageUsuario() {
+  const claves = obtenerClavesUsuario().localStorage;
   
-  for (const clave of claves) {
+  for (let index = 0; index < claves.length; index++) {
+    const clave = claves[index];
     try {
       let valor = localStorage.getItem(clave);
       if (valor) {
-        // Decodificar según la clave
-        if (clave.includes(btoa('pdf_hidden_state'))) {
+        // Decodificar según el índice
+        if (index === 1) {
           valor = atob(valor);
-        } else if (clave === rot13('pdf_secret_state')) {
+        } else if (index === 2) {
           valor = rot13(valor);
         }
         
         const estado = JSON.parse(valor);
         if (estado && typeof estado.usadas === 'number') {
-          console.log(`💾 Estado cargado desde localStorage: ${clave}`);
+          console.log(`💾 Estado del usuario cargado desde localStorage: ${clave}`);
           return estado;
         }
       }
@@ -378,44 +407,106 @@ function cargarDesdeLocalStorage() {
   return null;
 }
 
-// 3. INDEXEDDB PARA PERSISTENCIA AVANZADA
-function guardarEnIndexedDB(data) {
+// 2. COOKIES ESPECÍFICAS POR USUARIO
+function guardarEnCookiesUsuario(data) {
+  const claves = obtenerClavesUsuario().cookies;
+  const metodosGuardado = [];
+  const expires = new Date();
+  expires.setTime(expires.getTime() + (365 * 10 * 24 * 60 * 60 * 1000)); // 10 años
+  
+  claves.forEach((clave, index) => {
+    try {
+      let valorAGuardar = encodeURIComponent(data);
+      
+      // Aplicar encoding variado
+      if (index === 1) {
+        valorAGuardar = btoa(encodeURIComponent(data));
+      } else if (index === 2) {
+        valorAGuardar = encodeURIComponent(rot13(data));
+      }
+      
+      const cookieString = `${clave}=${valorAGuardar}; expires=${expires.toUTCString()}; path=/; SameSite=Strict`;
+      document.cookie = cookieString;
+      metodosGuardado.push(`cookie_user_${index}`);
+    } catch (e) {
+      console.warn(`Error guardando cookie ${clave}:`, e);
+    }
+  });
+  
+  return metodosGuardado;
+}
+
+function cargarDesdeCookiesUsuario() {
+  const claves = obtenerClavesUsuario().cookies;
+  
+  for (let index = 0; index < claves.length; index++) {
+    const clave = claves[index];
+    let valor = getCookie(clave);
+    if (valor) {
+      try {
+        // Decodificar según el índice
+        if (index === 1) {
+          valor = decodeURIComponent(atob(valor));
+        } else if (index === 2) {
+          valor = rot13(decodeURIComponent(valor));
+        } else {
+          valor = decodeURIComponent(valor);
+        }
+        
+        const estado = JSON.parse(valor);
+        if (estado && typeof estado.usadas === 'number') {
+          console.log(`🍪 Estado del usuario cargado desde cookie: ${clave}`);
+          return estado;
+        }
+      } catch (e) {
+        console.warn(`Error parseando cookie ${clave}:`, e);
+      }
+    }
+  }
+  
+  return null;
+}
+
+// 3. INDEXEDDB ESPECÍFICO POR USUARIO
+function guardarEnIndexedDBUsuario(data) {
   return new Promise((resolve) => {
     try {
-      const request = indexedDB.open('PDFLockDB', 1);
+      const request = indexedDB.open('PDFUserLockDB', 1);
       
       request.onupgradeneeded = (event) => {
         const db = event.target.result;
-        if (!db.objectStoreNames.contains('locks')) {
-          db.createObjectStore('locks', { keyPath: 'id' });
+        if (!db.objectStoreNames.contains('userLocks')) {
+          db.createObjectStore('userLocks', { keyPath: 'id' });
         }
       };
       
       request.onsuccess = (event) => {
         const db = event.target.result;
-        const transaction = db.transaction(['locks'], 'readwrite');
-        const store = transaction.objectStore('locks');
+        const transaction = db.transaction(['userLocks'], 'readwrite');
+        const store = transaction.objectStore('userLocks');
         
-        const registros = [
-          { id: 'main', data: data },
-          { id: dispositivoId.value, data: data },
-          { id: 'backup_' + Date.now(), data: data }
-        ];
+        const claves = obtenerClavesUsuario().indexedDB;
+        const registros = claves.map(clave => ({
+          id: clave,
+          data: data,
+          usuario: usuarioId.value,
+          timestamp: Date.now()
+        }));
         
         let guardados = 0;
         registros.forEach(registro => {
           store.put(registro).onsuccess = () => {
             guardados++;
             if (guardados === registros.length) {
-              console.log('🗄️ Estado guardado en IndexedDB');
-              resolve(['indexeddb_main', 'indexeddb_device', 'indexeddb_backup']);
+              console.log(`🗄️ Estado del usuario guardado en IndexedDB (${guardados} registros)`);
+              resolve(registros.map((_, i) => `idb_user_${i}`));
             }
           };
         });
       };
       
       request.onerror = () => {
-        console.warn('Error guardando en IndexedDB');
+        console.warn('Error guardando en IndexedDB del usuario');
         resolve([]);
       };
     } catch (e) {
@@ -425,18 +516,17 @@ function guardarEnIndexedDB(data) {
   });
 }
 
-function cargarDesdeIndexedDB() {
+function cargarDesdeIndexedDBUsuario() {
   return new Promise((resolve) => {
     try {
-      const request = indexedDB.open('PDFLockDB', 1);
+      const request = indexedDB.open('PDFUserLockDB', 1);
       
       request.onsuccess = (event) => {
         const db = event.target.result;
-        const transaction = db.transaction(['locks'], 'readonly');
-        const store = transaction.objectStore('locks');
+        const transaction = db.transaction(['userLocks'], 'readonly');
+        const store = transaction.objectStore('userLocks');
         
-        // Intentar cargar en orden de prioridad
-        const claves = ['main', dispositivoId.value];
+        const claves = obtenerClavesUsuario().indexedDB;
         
         function intentarClave(index) {
           if (index >= claves.length) {
@@ -447,11 +537,18 @@ function cargarDesdeIndexedDB() {
           const request = store.get(claves[index]);
           request.onsuccess = () => {
             if (request.result && request.result.data) {
-              console.log(`🗄️ Estado cargado desde IndexedDB: ${claves[index]}`);
-              resolve(JSON.parse(request.result.data));
-            } else {
-              intentarClave(index + 1);
+              try {
+                const estado = JSON.parse(request.result.data);
+                if (estado && typeof estado.usadas === 'number') {
+                  console.log(`🗄️ Estado del usuario cargado desde IndexedDB: ${claves[index]}`);
+                  resolve(estado);
+                  return;
+                }
+              } catch (e) {
+                console.warn(`Error parseando IndexedDB ${claves[index]}:`, e);
+              }
             }
+            intentarClave(index + 1);
           };
           request.onerror = () => intentarClave(index + 1);
         }
@@ -491,31 +588,36 @@ function getCookie(name) {
 }
 
 // ================================
-// GESTIÓN DE ESTADO PRINCIPAL
+// GESTIÓN DE ESTADO POR USUARIO
 // ================================
 
-async function cargarEstadoCompleto() {
-  console.log('🔍 Iniciando carga de estado desde todos los métodos...');
+async function cargarEstadoUsuarioEspecifico() {
+  if (!usuarioId.value) {
+    console.error('❌ ID de usuario no disponible');
+    return;
+  }
+  
+  console.log(`🔍 Cargando estado específico para usuario: ${nombre.value}`);
   
   let estadoEncontrado = null;
   let metodoUsado = '';
   
-  // 1. Intentar cargar desde IndexedDB
+  // 1. Intentar cargar desde IndexedDB del usuario
   if (!estadoEncontrado) {
-    estadoEncontrado = await cargarDesdeIndexedDB();
-    if (estadoEncontrado) metodoUsado += 'IndexedDB ';
+    estadoEncontrado = await cargarDesdeIndexedDBUsuario();
+    if (estadoEncontrado) metodoUsado += 'IndexedDB-User ';
   }
   
-  // 2. Intentar cargar desde cookies
+  // 2. Intentar cargar desde cookies del usuario
   if (!estadoEncontrado) {
-    estadoEncontrado = cargarDesdeCookies();
-    if (estadoEncontrado) metodoUsado += 'Cookies ';
+    estadoEncontrado = cargarDesdeCookiesUsuario();
+    if (estadoEncontrado) metodoUsado += 'Cookies-User ';
   }
   
-  // 3. Intentar cargar desde localStorage
+  // 3. Intentar cargar desde localStorage del usuario
   if (!estadoEncontrado) {
-    estadoEncontrado = cargarDesdeLocalStorage();
-    if (estadoEncontrado) metodoUsado += 'localStorage ';
+    estadoEncontrado = cargarDesdeLocalStorageUsuario();
+    if (estadoEncontrado) metodoUsado += 'LocalStorage-User ';
   }
   
   if (estadoEncontrado) {
@@ -524,70 +626,77 @@ async function cargarEstadoCompleto() {
     estadoBloqueo.value = descargasUsadas.value >= limiteDescargas.value ? 'bloqueado' : 'desbloqueado';
     metodosActivos.value = metodoUsado.trim();
     
-    console.log(`✅ Estado cargado: ${descargasUsadas.value}/${limiteDescargas.value} desde ${metodoUsado}`);
+    console.log(`✅ Estado del usuario ${nombre.value} cargado: ${descargasUsadas.value}/${limiteDescargas.value} desde ${metodoUsado}`);
     
     // Asegurar que el estado esté guardado en todos los métodos
-    await guardarEstadoCompleto();
+    await guardarEstadoUsuarioCompleto();
   } else {
-    console.log('ℹ️ No se encontró estado previo - primera visita');
-    metodosActivos.value = 'Nuevo';
+    console.log(`ℹ️ Sin estado previo para usuario ${nombre.value} - primera visita`);
+    metodosActivos.value = 'Nuevo usuario';
   }
 }
 
-async function guardarEstadoCompleto() {
+async function guardarEstadoUsuarioCompleto() {
+  if (!usuarioId.value) {
+    console.error('❌ No se puede guardar: ID de usuario no disponible');
+    return false;
+  }
+  
   const estado = {
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
+    usuarioId: usuarioId.value,
     dispositivoId: dispositivoId.value,
+    nombreUsuario: nombre.value,
     timestamp: Date.now(),
-    version: '6.0-ultra',
+    version: '7.0-user-specific',
     domain: window.location.hostname
   };
   
   const estadoJson = JSON.stringify(estado);
   const metodosExitosos = [];
   
-  // Guardar en todos los métodos disponibles
   try {
-    // 1. Cookies
-    const cookiesGuardadas = guardarEnCookies(estadoJson);
+    // 1. Guardar en cookies específicas del usuario
+    const cookiesGuardadas = guardarEnCookiesUsuario(estadoJson);
     metodosExitosos.push(...cookiesGuardadas);
     
-    // 2. localStorage
-    const lsGuardado = guardarEnLocalStorage(estadoJson);
+    // 2. Guardar en localStorage específico del usuario
+    const lsGuardado = guardarEnLocalStorageUsuario(estadoJson);
     metodosExitosos.push(...lsGuardado);
     
-    // 3. IndexedDB
-    const idbGuardado = await guardarEnIndexedDB(estadoJson);
+    // 3. Guardar en IndexedDB específico del usuario
+    const idbGuardado = await guardarEnIndexedDBUsuario(estadoJson);
     metodosExitosos.push(...idbGuardado);
     
   } catch (error) {
-    console.error('❌ Error guardando estado:', error);
+    console.error('❌ Error guardando estado del usuario:', error);
   }
   
   ultimoGuardado.value = new Date().toLocaleTimeString();
-  metodosActivos.value = `${metodosExitosos.length} métodos activos`;
+  metodosActivos.value = `${metodosExitosos.length} métodos de usuario`;
   
-  console.log(`💾 Estado guardado en ${metodosExitosos.length} ubicaciones:`, metodosExitosos);
+  console.log(`💾 Estado del usuario ${nombre.value} guardado en ${metodosExitosos.length} ubicaciones`);
   
   return metodosExitosos.length > 0;
 }
 
 async function verificarYMantenerPersistencia() {
-  // Verificar si el estado sigue disponible en al menos un método
-  const estadoCookies = cargarDesdeCookies();
-  const estadoLS = cargarDesdeLocalStorage();
-  const estadoIDB = await cargarDesdeIndexedDB();
+  if (!usuarioId.value) return;
+  
+  // Verificar si el estado del usuario sigue disponible
+  const estadoCookies = cargarDesdeCookiesUsuario();
+  const estadoLS = cargarDesdeLocalStorageUsuario();
+  const estadoIDB = await cargarDesdeIndexedDBUsuario();
   
   const estadosEncontrados = [estadoCookies, estadoLS, estadoIDB].filter(Boolean);
   
   if (estadosEncontrados.length === 0 && (descargasUsadas.value > 0 || estadoBloqueo.value === 'bloqueado')) {
-    console.warn('⚠️ Estado perdido, restaurando desde memoria...');
-    await guardarEstadoCompleto();
+    console.warn(`⚠️ Estado del usuario ${nombre.value} perdido, restaurando...`);
+    await guardarEstadoUsuarioCompleto();
   } else if (estadosEncontrados.length < 3) {
-    // Si faltan métodos, restaurar
-    console.log(`🔧 Restaurando métodos faltantes (${estadosEncontrados.length}/3)...`);
-    await guardarEstadoCompleto();
+    console.log(`🔧 Restaurando métodos faltantes para ${nombre.value} (${estadosEncontrados.length}/3)...`);
+    await guardarEstadoUsuarioCompleto();
   }
 }
 
@@ -596,7 +705,14 @@ async function verificarYMantenerPersistencia() {
 // ================================
 
 async function generarPDF() {
-  // Verificar límite antes de proceder
+  // Verificar que el usuario esté inicializado
+  if (!usuarioId.value) {
+    console.error('❌ Usuario no inicializado');
+    alert('Error: Usuario no inicializado. Recarga la página.');
+    return;
+  }
+  
+  // Verificar límite específico del usuario
   if (limiteAlcanzado.value) {
     mostrarModalLimite.value = true;
     return;
@@ -624,17 +740,17 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
       
-    // Incrementar contador INMEDIATAMENTE y guardar en TODOS los métodos
+    // Incrementar contador ESPECÍFICO DEL USUARIO
     descargasUsadas.value++;
-    const guardado = await guardarEstadoCompleto();
+    const guardado = await guardarEstadoUsuarioCompleto();
     
     if (!guardado) {
-      console.error('❌ CRITICAL: No se pudo guardar el estado');
+      console.error('❌ CRITICAL: No se pudo guardar el estado del usuario');
     }
     
-    console.log('📄 PDF generado. Estado ultra-persistente actualizado.');
+    console.log(`📄 PDF generado para ${nombreUsuario}. Estado específico actualizado.`);
     
-    // Mostrar modal si se alcanzó el límite
+    // Mostrar modal si este usuario alcanzó el límite
     if (limiteAlcanzado.value) {
       setTimeout(() => {
         mostrarModalLimite.value = true;
@@ -643,7 +759,7 @@ async function generarPDF() {
       
   } catch (error) {
     console.error('❌ Error al generar PDF:', error);
-    // NO revertir contador - mantener la descarga contada por seguridad
+    // Mantener contador - política de seguridad
   } finally {
     generando.value = false;
   }
@@ -674,7 +790,7 @@ async function verificarCodigo() {
     return;
   }
 
-  const codigosValidos = [
+  const codigosGlobales = [
     'ADMIN123', 
     'UNLOCK2024', 
     'RANDY123',
@@ -686,170 +802,340 @@ async function verificarCodigo() {
     'ULTRACLEAN2024'
   ];
   
+  // Código específico para este usuario
+  const codigoUsuarioEspecifico = `UNLOCK_${usuarioId.value.substring(5, 13).toUpperCase()}`;
+  
+  const codigosValidos = [...codigosGlobales, codigoUsuarioEspecifico];
+  
   if (codigosValidos.includes(codigo)) {
-    console.log('🔓 Código válido, iniciando LIMPIEZA TOTAL...');
+    console.log(`🔓 Código válido para usuario ${nombre.value}, iniciando limpieza...`);
     
-    // LIMPIEZA TOTAL DE TODOS LOS MÉTODOS
-    await limpiezaCompleta();
+    // LIMPIEZA ESPECÍFICA DEL USUARIO (no afecta otros usuarios)
+    await limpiarUsuarioEspecifico();
     
-    alert('¡Código válido! Sistema completamente limpio y restablecido.');
+    alert(`✅ Código válido! Límite de descargas restablecido para ${nombre.value}.`);
     cerrarModal();
     
-    console.log('✅ LIMPIEZA TOTAL completada');
+    console.log(`✅ Limpieza específica completada para ${nombre.value}`);
   } else {
-    alert('Código inválido. Contacte al administrador.');
+    alert('❌ Código inválido. Contacte al administrador.');
+    if (mostrarDebugInfo.value) {
+      console.log(`💡 Código específico para ${nombre.value}: ${codigoUsuarioEspecifico}`);
+    }
   }
   
   codigoDesbloqueo.value = '';
 }
 
-async function limpiezaCompleta() {
-  console.log('🧹 Iniciando limpieza completa del sistema...');
+async function limpiarUsuarioEspecifico() {
+  if (!usuarioId.value) {
+    console.error('❌ No se puede limpiar: ID de usuario no disponible');
+    return;
+  }
   
-  // 1. Limpiar TODAS las cookies
-  const allCookies = document.cookie.split(';');
-  const pdfCookies = allCookies
-    .map(cookie => cookie.split('=')[0].trim())
-    .filter(name => name.toLowerCase().includes('pdf'));
+  console.log(`🧹 Limpiando datos específicos del usuario: ${nombre.value}`);
   
-  pdfCookies.forEach(cookieName => {
-    const pastDate = 'expires=Thu, 01 Jan 1970 00:00:00 UTC';
-    document.cookie = `${cookieName}=; ${pastDate}; path=/`;
-    document.cookie = `${cookieName}=; ${pastDate}; path=/; domain=${window.location.hostname}`;
-  });
+  const claves = obtenerClavesUsuario();
   
-  // 2. Limpiar localStorage
-  const lsKeys = Object.keys(localStorage).filter(key => 
-    key.toLowerCase().includes('pdf') || key.includes('lock')
-  );
-  lsKeys.forEach(key => {
+  // 1. Limpiar localStorage específico del usuario
+  claves.localStorage.forEach(clave => {
     try {
-      localStorage.removeItem(key);
+      localStorage.removeItem(clave);
+      console.log(`✅ Eliminado localStorage: ${clave}`);
     } catch (e) {
-      console.warn(`Error eliminando ${key}:`, e);
+      console.warn(`Error eliminando localStorage ${clave}:`, e);
     }
   });
   
-  // 3. Limpiar IndexedDB
+  // 2. Limpiar cookies específicas del usuario
+  claves.cookies.forEach(cookieName => {
+    try {
+      const pastDate = 'expires=Thu, 01 Jan 1970 00:00:00 UTC';
+      document.cookie = `${cookieName}=; ${pastDate}; path=/`;
+      document.cookie = `${cookieName}=; ${pastDate}; path=/; domain=${window.location.hostname}`;
+      console.log(`✅ Eliminada cookie: ${cookieName}`);
+    } catch (e) {
+      console.warn(`Error eliminando cookie ${cookieName}:`, e);
+    }
+  });
+  
+  // 3. Limpiar IndexedDB específico del usuario
   try {
-    const deleteRequest = indexedDB.deleteDatabase('PDFLockDB');
-    deleteRequest.onsuccess = () => console.log('🗄️ IndexedDB eliminada');
+    const request = indexedDB.open('PDFUserLockDB', 1);
+    request.onsuccess = (event) => {
+      const db = event.target.result;
+      const transaction = db.transaction(['userLocks'], 'readwrite');
+      const store = transaction.objectStore('userLocks');
+      
+      claves.indexedDB.forEach(clave => {
+        store.delete(clave).onsuccess = () => {
+          console.log(`✅ Eliminado IndexedDB: ${clave}`);
+        };
+      });
+    };
   } catch (e) {
-    console.warn('Error eliminando IndexedDB:', e);
+    console.warn('Error limpiando IndexedDB:', e);
   }
   
-  // 4. Resetear estado
+  // 4. Resetear estado del usuario actual
   descargasUsadas.value = 0;
   estadoBloqueo.value = 'desbloqueado';
-  metodosActivos.value = 'Limpio';
+  metodosActivos.value = 'Usuario limpio';
+  ultimoGuardado.value = '';
   
-  // 5. Regenerar ID del dispositivo
-  dispositivoId.value = await generarIdDispositivo();
-  
-  console.log('🧹 Limpieza completa finalizada');
+  console.log(`🧹 Limpieza específica completada para usuario: ${nombre.value}`);
 }
 
-// Funciones de desarrollo
+// ================================
+// FUNCIONES DE DEBUG Y ADMINISTRACIÓN
+// ================================
+
+function mostrarEstadoCompleto() {
+  console.log('📊 Estado completo del usuario actual:');
+  console.log('Nombre:', nombre.value);
+  console.log('ID Usuario:', usuarioId.value);
+  console.log('ID Dispositivo:', dispositivoId.value);
+  console.log('Descargas:', descargasUsadas.value);
+  console.log('Límite:', limiteDescargas.value);
+  console.log('Estado:', estadoBloqueo.value);
+  console.log('Métodos activos:', metodosActivos.value);
+  console.log('Último guardado:', ultimoGuardado.value);
+  console.log('Código específico:', `UNLOCK_${usuarioId.value.substring(5, 13).toUpperCase()}`);
+  
+  // Mostrar claves específicas del usuario
+  console.log('🔑 Claves específicas del usuario:');
+  const claves = obtenerClavesUsuario();
+  console.log('LocalStorage:', claves.localStorage);
+  console.log('Cookies:', claves.cookies);
+  console.log('IndexedDB:', claves.indexedDB);
+}
+
+async function forzarGuardado() {
+  console.log('💾 Forzando guardado del estado del usuario...');
+  const exito = await guardarEstadoUsuarioCompleto();
+  console.log(exito ? '✅ Guardado exitoso' : '❌ Error en guardado');
+}
+
+async function verificarPersistencia() {
+  console.log('🔍 Verificando persistencia del usuario...');
+  await verificarYMantenerPersistencia();
+  console.log('✅ Verificación completada');
+}
+
+async function limpiarUsuarioActual() {
+  if (confirm(`¿Estás seguro de limpiar todos los datos del usuario "${nombre.value}"?`)) {
+    await limpiarUsuarioEspecifico();
+    console.log('🧹 Usuario limpiado');
+  }
+}
+
+function cambiarUsuarioActual() {
+  const nuevoNombre = nuevoNombreUsuario.value.trim();
+  if (!nuevoNombre) {
+    alert('Por favor ingrese un nombre de usuario válido');
+    return;
+  }
+  
+  localStorage.setItem('usuario', JSON.stringify({ nombre: nuevoNombre }));
+  console.log(`🔄 Usuario cambiado a: ${nuevoNombre}. Recargando página...`);
+  location.reload();
+}
+
+function listarUsuariosBloqueados() {
+  console.log('🗂️ Buscando usuarios bloqueados en este dispositivo...');
+  
+  // Buscar en localStorage
+  console.log('📁 LocalStorage:');
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && (key.includes('pdf_lock_USER_') || key.includes('pdf_downloads_USER_'))) {
+      try {
+        const valor = localStorage.getItem(key);
+        const estado = JSON.parse(valor);
+        if (estado.usadas > 0) {
+          console.log(`  ${key}: ${estado.nombreUsuario || 'Sin nombre'} - ${estado.usadas}/${estado.limite}`);
+        }
+      } catch (e) {
+        console.log(`  ${key}: (error parsing)`);
+      }
+    }
+  }
+  
+  // Buscar en cookies
+  console.log('🍪 Cookies:');
+  const cookies = document.cookie.split(';');
+  cookies.forEach(cookie => {
+    const [name] = cookie.trim().split('=');
+    if (name && name.includes('pdf_user_USER_')) {
+      console.log(`  ${name}: (cookie encontrada)`);
+    }
+  });
+}
+
+// Funciones de desarrollo y debug
 if (import.meta.env.DEV) {
-  window.resetearTodoPDF = limpiezaCompleta;
-  window.mostrarEstadoActual = () => {
-    console.log('📊 Estado actual del sistema:');
-    console.log('ID Dispositivo:', dispositivoId.value);
-    console.log('Descargas:', descargasUsadas.value);
-    console.log('Estado:', estadoBloqueo.value);
-    console.log('Métodos activos:', metodosActivos.value);
+  window.resetearUsuarioActual = limpiarUsuarioEspecifico;
+  window.mostrarEstadoUsuario = mostrarEstadoCompleto;
+  window.forzarGuardadoUsuario = guardarEstadoUsuarioCompleto;
+  window.verificarPersistenciaUsuario = verificarYMantenerPersistencia;
+  window.cambiarUsuario = (nuevoNombre) => {
+    localStorage.setItem('usuario', JSON.stringify({ nombre: nuevoNombre }));
+    console.log(`🔄 Usuario cambiado a: ${nuevoNombre}. Recarga la página para aplicar.`);
+    location.reload();
   };
-  window.forzarGuardado = guardarEstadoCompleto;
-  window.verificarPersistencia = verificarYMantenerPersistencia;
+  window.listarUsuariosBloqueados = listarUsuariosBloqueados;
 }
 </script>
 
-<style>
-.pdf-root { background: #fff; padding: 0.3in; }
-.carta { page-break-after: always; }
-.carta:last-child { page-break-after: auto; }
+<style scoped>
+/* ================================
+   ESTILOS PRINCIPALES
+   ================================ */
+
+.pdf-root {
+  background: white;
+  width: 100%;
+  max-width: 8.5in;
+  margin: 0 auto;
+  position: relative;
+  transition: all 0.3s ease;
+}
+
+.pdf-root.generando-pdf {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* ================================
+   BOTÓN DE GENERAR PDF
+   ================================ */
 
 .pdf-button {
   position: fixed;
-  right: 24px;
-  bottom: 24px;
-  padding: 12px 18px;
-  min-width: 180px;
-  border-radius: 12px;
+  bottom: 30px;
+  right: 30px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
   border: none;
-  outline: none;
-  cursor: pointer;
-  color: #fff;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
+  border-radius: 50px;
+  padding: 15px 25px;
+  font-size: 16px;
   font-weight: 600;
-  letter-spacing: 0.2px;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  cursor: pointer;
+  box-shadow: 0 8px 32px rgba(102, 126, 234, 0.4);
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   z-index: 1000;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-.pdf-button:hover:not(:disabled) { 
-  transform: translateY(-2px); 
-  box-shadow: 0 12px 24px rgba(0,0,0,0.25); 
+.pdf-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(102, 126, 234, 0.6);
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
 }
 
-.pdf-button:disabled { 
-  opacity: 0.75; 
-  cursor: not-allowed; 
-  transform: none; 
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15); 
+.pdf-button:active {
+  transform: translateY(0);
+  box-shadow: 0 4px 20px rgba(102, 126, 234, 0.4);
+}
+
+.pdf-button:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+  transform: none;
 }
 
 .pdf-button.limite-alcanzado {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  cursor: pointer;
-  opacity: 1;
+  background: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
+  animation: pulse-warning 2s infinite;
 }
 
 .pdf-button.limite-alcanzado:hover {
-  transform: translateY(-2px); 
-  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.4);
+  background: linear-gradient(135deg, #ff5252 0%, #d63031 100%);
+  box-shadow: 0 12px 40px rgba(255, 107, 107, 0.6);
 }
 
-.btn-icon { font-size: 18px; line-height: 1; }
-.btn-text { font-size: 14px; }
+@keyframes pulse-warning {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+
+.btn-icon {
+  font-size: 20px;
+}
+
+.btn-text {
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top: 2px solid white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* ================================
+   CONTADOR VISUAL
+   ================================ */
 
 .contador-info {
   position: fixed;
-  right: 24px;
-  bottom: 90px;
+  bottom: 100px;
+  right: 30px;
   background: rgba(255, 255, 255, 0.95);
-  padding: 8px 12px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-  font-size: 12px;
-  color: #666;
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 15px;
+  padding: 12px 18px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
   z-index: 999;
+  transition: all 0.3s ease;
+}
+
+.contador-info:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
 }
 
 .contador-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: #667eea;
   display: block;
-  margin-bottom: 4px;
-  font-weight: 500;
+  margin-bottom: 8px;
 }
 
 .contador-barra {
-  width: 120px;
-  height: 4px;
-  background: #e5e7eb;
-  border-radius: 2px;
+  width: 150px;
+  height: 6px;
+  background: rgba(102, 126, 234, 0.2);
+  border-radius: 3px;
   overflow: hidden;
 }
 
 .contador-progreso {
   height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+  border-radius: 3px;
   transition: width 0.3s ease;
 }
+
+/* ================================
+   MODAL DE LÍMITE ALCANZADO
+   ================================ */
 
 .modal-overlay {
   position: fixed;
@@ -857,7 +1143,8 @@ if (import.meta.env.DEV) {
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.8);
+  backdrop-filter: blur(8px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -865,75 +1152,96 @@ if (import.meta.env.DEV) {
   animation: fadeIn 0.3s ease;
 }
 
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
 .modal-content {
   background: white;
-  border-radius: 16px;
+  border-radius: 20px;
   max-width: 500px;
   width: 90%;
   max-height: 90vh;
   overflow-y: auto;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-  animation: slideIn 0.3s ease;
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.3);
+  animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(30px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .modal-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 25px 25px 15px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.1);
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: #f9fafb;
+  justify-content: space-between;
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #ef4444;
-  font-size: 1.25rem;
+  font-size: 20px;
+  font-weight: 700;
+  color: #333;
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
 
 .close-btn {
   background: none;
   border: none;
-  font-size: 1.5rem;
+  font-size: 24px;
+  color: #999;
   cursor: pointer;
-  color: #6b7280;
-  padding: 0;
-  width: 30px;
-  height: 30px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  padding: 5px;
   border-radius: 50%;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
+  background: rgba(0, 0, 0, 0.1);
+  color: #333;
 }
 
 .modal-body {
-  padding: 1.5rem;
-  line-height: 1.6;
+  padding: 25px;
 }
 
 .modal-body p {
-  margin-bottom: 1rem;
-  color: #374151;
+  margin: 0 0 15px;
+  color: #666;
+  line-height: 1.6;
 }
 
+/* ================================
+   INFORMACIÓN DE CONTACTO
+   ================================ */
+
 .contact-info {
-  background: #f3f4f6;
-  padding: 1rem;
-  border-radius: 8px;
-  margin: 1rem 0;
+  background: linear-gradient(135deg, #f8f9ff 0%, #f0f2ff 100%);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 15px;
+  padding: 20px;
+  margin: 20px 0;
 }
 
 .contact-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  gap: 12px;
+  margin-bottom: 12px;
   font-weight: 500;
+  color: #333;
 }
 
 .contact-item:last-child {
@@ -941,164 +1249,337 @@ if (import.meta.env.DEV) {
 }
 
 .contact-icon {
-  font-size: 1rem;
+  font-size: 18px;
+  width: 24px;
+  text-align: center;
 }
 
-.note {
-  font-size: 0.875rem;
-  color: #6b7280;
-  font-style: italic;
-}
+/* ================================
+   CÓDIGO DE DESBLOQUEO
+   ================================ */
 
 .codigo-desbloqueo {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
+  background: rgba(255, 255, 255, 0.8);
+  border: 2px solid #667eea;
+  border-radius: 15px;
+  padding: 20px;
+  margin: 20px 0;
 }
 
 .codigo-desbloqueo label {
   display: block;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
-  color: #374151;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 10px;
+  font-size: 14px;
 }
 
 .codigo-input {
   width: 100%;
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  margin-bottom: 0.75rem;
-  font-size: 1rem;
-  transition: border-color 0.2s ease;
-  box-sizing: border-box;
+  padding: 12px 15px;
+  border: 2px solid rgba(102, 126, 234, 0.3);
+  border-radius: 10px;
+  font-size: 16px;
+  font-family: 'Courier New', monospace;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-bottom: 15px;
+  transition: all 0.3s ease;
+  background: white;
 }
 
 .codigo-input:focus {
   outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
 .btn-verificar {
-  width: 100%;
-  padding: 0.75rem;
-  background: #10b981;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  border-radius: 6px;
-  font-weight: 500;
+  padding: 12px 25px;
+  border-radius: 10px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: all 0.3s ease;
+  width: 100%;
 }
 
-.btn-verificar:hover:not(:disabled) {
-  background: #059669;
+.btn-verificar:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .btn-verificar:disabled {
-  background: #9ca3af;
+  opacity: 0.5;
   cursor: not-allowed;
+  transform: none;
 }
 
+/* ================================
+   DEBUG INFO
+   ================================ */
+
 .debug-info {
-  margin-top: 1rem;
-  padding: 0.75rem;
-  background: #fef3c7;
-  border-radius: 6px;
-  border: 1px solid #f59e0b;
-  font-size: 0.75rem;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 15px;
+  margin-top: 20px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
 }
 
 .debug-info p {
-  margin: 0.25rem 0;
-  font-family: monospace;
+  margin: 5px 0 !important;
+  color: #495057 !important;
 }
 
+.debug-info strong {
+  color: #333;
+}
+
+.note {
+  font-size: 13px;
+  color: #999;
+  font-style: italic;
+  margin-top: 15px;
+}
+
+/* ================================
+   FOOTER DEL MODAL
+   ================================ */
+
 .modal-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  padding: 20px 25px;
+  border-top: 1px solid rgba(0, 0, 0, 0.1);
   display: flex;
-  gap: 0.75rem;
+  gap: 12px;
   justify-content: flex-end;
-  background: #f9fafb;
 }
 
 .btn-primary, .btn-secondary {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-weight: 500;
+  padding: 12px 20px;
+  border-radius: 10px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.3s ease;
   border: none;
-  font-size: 0.875rem;
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
 }
 
 .btn-secondary {
-  background: #6b7280;
-  color: white;
+  background: #f8f9fa;
+  color: #333;
+  border: 1px solid #e9ecef;
 }
 
 .btn-secondary:hover {
-  background: #4b5563;
+  background: #e9ecef;
 }
 
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255,255,255,0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
+/* ================================
+   PANEL DE ADMINISTRACIÓN
+   ================================ */
+
+.admin-panel {
+  position: fixed;
+  top: 20px;
+  left: 20px;
+  background: rgba(255, 255, 255, 0.95);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(102, 126, 234, 0.2);
+  border-radius: 15px;
+  padding: 20px;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+  z-index: 999;
+  max-width: 300px;
 }
 
-@keyframes spin { 
-  from { transform: rotate(0deg); } 
-  to { transform: rotate(360deg); } 
+.admin-panel h4 {
+  margin: 0 0 15px;
+  color: #333;
+  font-size: 16px;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+.admin-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 15px;
 }
 
-@keyframes slideIn {
-  from { transform: translateY(-20px) scale(0.95); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
+.debug-btn {
+  padding: 8px 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: #f8f9fa;
+  color: #333;
+  border: 1px solid #e9ecef;
 }
 
-.generando-pdf .no-imprimir { display: none !important; }
+.debug-btn:hover {
+  background: #e9ecef;
+  transform: translateY(-1px);
+}
+
+.debug-btn.danger {
+  background: #ff6b6b;
+  color: white;
+  border-color: #ff5252;
+}
+
+.debug-btn.danger:hover {
+  background: #ff5252;
+}
+
+.debug-input {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.debug-input input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  font-size: 14px;
+}
+
+.debug-input input:focus {
+  outline: none;
+  border-color: #667eea;
+}
+
+/* ================================
+   RESPONSIVO
+   ================================ */
 
 @media (max-width: 768px) {
+  .pdf-button {
+    bottom: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    font-size: 14px;
+  }
+  
+  .contador-info {
+    bottom: 80px;
+    right: 20px;
+    padding: 10px 15px;
+  }
+  
+  .contador-text {
+    font-size: 12px;
+  }
+  
+  .contador-barra {
+    width: 120px;
+  }
+  
   .modal-content {
-    width: 95%;
-    margin: 1rem;
+    margin: 20px;
+    width: calc(100% - 40px);
+  }
+  
+  .modal-header,
+  .modal-body,
+  .modal-footer {
+    padding: 20px;
   }
   
   .modal-footer {
     flex-direction: column;
   }
   
-  .contador-info {
-    right: 16px;
-    bottom: 80px;
+  .btn-primary,
+  .btn-secondary {
+    width: 100%;
   }
   
-  .pdf-button {
-    right: 16px;
-    bottom: 16px;
-    min-width: 160px;
+  .admin-panel {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    max-width: none;
+    position: relative;
+    margin-bottom: 20px;
   }
+}
+
+/* ================================
+   ANIMACIONES ADICIONALES
+   ================================ */
+
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+.pdf-button.limite-alcanzado .btn-icon {
+  animation: bounce 2s infinite;
+}
+
+/* ================================
+   ESTADOS DE LOADING
+   ================================ */
+
+.generando-pdf::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(255, 255, 255, 0.8);
+  z-index: 10;
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.8; }
+  50% { opacity: 0.6; }
+}
+
+/* ================================
+   EFECTOS DE GLASSMORPHISM
+   ================================ */
+
+.modal-overlay {
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.pdf-button,
+.contador-info,
+.admin-panel {
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
 }
 </style>
