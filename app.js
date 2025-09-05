@@ -13,7 +13,7 @@ import hojaRoutes from "./routes/hojaVidaRoutes.js";
 import usuariosRoute from "./routes/usuarios.js";
 import loginRoute from "./routes/login.js";
 import datosPersonalesRoute from "./routes/datosPersonales.js";
-import experienciaTotRoutes from "./routes/resumenExperiencia.js";
+import experienciaTotRoutes from "./routes/experienciaTot.js";
 import pdfRoutes from "./routes/pdf.js";
 import idiomasRoutes from "./routes/idiomas.js";
 
@@ -69,4 +69,5 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 export default app;
+
 
