@@ -1,15 +1,15 @@
-// api/axios.js - Configuración corregida para desarrollo y producción
+// src/api/axios.js - Configuración corregida para desarrollo y producción
 
 import axios from 'axios';
 
-// ✅ SOLUCIÓN: URL base dinámica
+// ✅ SOLUCIÓN: URL base dinámica que funciona en desarrollo y producción
 const getBaseURL = () => {
   // Si estamos en desarrollo local
   if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
-    return 'http://localhost:4000'; // Tu puerto de desarrollo del backend
+    return 'http://localhost:4000/api'; // ⚠️ Puerto 4000 (tu backend real)
   }
-  // Si estamos en producción (Heroku), usar la misma URL del frontend
-  return window.location.origin;
+  // Si estamos en producción (Heroku), usar la misma URL del frontend + /api
+  return `${window.location.origin}/api`;
 };
 
 // Crear instancia de axios con configuración dinámica
