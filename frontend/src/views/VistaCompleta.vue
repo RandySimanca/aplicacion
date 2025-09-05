@@ -92,18 +92,19 @@
 </template>
 
 <script setup>
-import { ref, nextTick, computed, onMounted } from 'vue';
+import { ref, nextTick, computed, onMounted, watch } from 'vue';
 import html2pdf from 'html2pdf.js';
 import Hoja1 from './Hoja1.vue';
 import Hoja2 from './Hoja2.vue';
 import Hoja3 from './Hoja3.vue';
-import { useRoute } from 'vue-router';
+import { useRoute, useRouter } from 'vue-router';
 import { useUsuarioStore } from '../stores/usuarios';
 
 const documento = ref(null);
 const generando = ref(false);
 const nombre = ref('Invitado');
 const route = useRoute();
+const router = useRouter();
 const usuarioStore = useUsuarioStore();
 
 // Sistema de contador de descargas
@@ -114,43 +115,101 @@ const textoCopiado = ref(false);
 const codigoDesbloqueo = ref('');
 const mensajeVerificacion = ref('');
 
+// Identificador único para el dispositivo
+const deviceId = ref('');
+
 // Computed properties
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
+const isAuthenticated = computed(() => {
+  const usuario = JSON.parse(localStorage.getItem('usuario'));
+  return usuario && usuario.id && usuario.id !== 'anonimo';
+});
 
 onMounted(() => {
   const datos = JSON.parse(localStorage.getItem('usuario'));
   if (datos?.nombre) nombre.value = datos.nombre;
   
-  // Cargar contador de descargas del localStorage
+  // Generar o obtener ID único del dispositivo
+  obtenerDeviceId();
+  
+  // Cargar contador de descargas
   cargarContadorDescargas();
 });
 
+// Observar cambios en el estado de autenticación
+watch(() => usuarioStore.usuario, (nuevoUsuario) => {
+  if (nuevoUsuario) {
+    // El usuario ha iniciado sesión, cargar su contador
+    cargarContadorDescargas();
+  }
+}, { deep: true });
+
+// Generar o obtener un ID único para el dispositivo
+function obtenerDeviceId() {
+  let id = localStorage.getItem('device_id');
+  if (!id) {
+    // Generar un ID único si no existe
+    id = 'device_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
+    localStorage.setItem('device_id', id);
+  }
+  deviceId.value = id;
+}
+
 function cargarContadorDescargas() {
+  // Primero intentar cargar por usuario si está autenticado
   const usuario = JSON.parse(localStorage.getItem('usuario'));
-  const userId = usuario?.id || 'anonimo';
-  const key = `descargas_pdf_${userId}`;
   
+  if (usuario?.id) {
+    // Usuario autenticado - cargar por ID de usuario
+    const key = `descargas_pdf_${usuario.id}`;
+    const datos = localStorage.getItem(key);
+    
+    if (datos) {
+      const info = JSON.parse(datos);
+      descargasUsadas.value = info.usadas || 0;
+      limiteDescargas.value = info.limite || 1;
+      return;
+    }
+  }
+  
+  // Si no hay usuario autenticado, cargar por dispositivo
+  const key = `descargas_pdf_device_${deviceId.value}`;
   const datos = localStorage.getItem(key);
+  
   if (datos) {
     const info = JSON.parse(datos);
     descargasUsadas.value = info.usadas || 0;
-    limiteDescargas.value = info.limite || 5;
+    limiteDescargas.value = info.limite || 1;
   }
 }
 
 function guardarContadorDescargas() {
   const usuario = JSON.parse(localStorage.getItem('usuario'));
-  const userId = usuario?.id || 'anonimo';
-  const key = `descargas_pdf_${userId}`;
   
-  const info = {
+  if (usuario?.id) {
+    // Guardar por ID de usuario si está autenticado
+    const key = `descargas_pdf_${usuario.id}`;
+    const info = {
+      usadas: descargasUsadas.value,
+      limite: limiteDescargas.value,
+      ultimaDescarga: new Date().toISOString(),
+      deviceId: deviceId.value // Registrar también el dispositivo
+    };
+    
+    localStorage.setItem(key, JSON.stringify(info));
+  }
+  
+  // Siempre guardar también por dispositivo
+  const deviceKey = `descargas_pdf_device_${deviceId.value}`;
+  const deviceInfo = {
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
-    ultimaDescarga: new Date().toISOString()
+    ultimaDescarga: new Date().toISOString(),
+    userId: usuario?.id || 'anonimo'
   };
   
-  localStorage.setItem(key, JSON.stringify(info));
+  localStorage.setItem(deviceKey, JSON.stringify(deviceInfo));
 }
 
 async function generarPDF() {
