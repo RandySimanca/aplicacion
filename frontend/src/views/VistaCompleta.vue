@@ -6,8 +6,9 @@
       <Hoja3 />
     </div>
 
-    <!-- Botón de generar PDF -->
+    <!-- Botón de generar PDF (oculto durante generación) -->
     <button
+      v-show="!generando"
       class="pdf-button"
       :disabled="generando"
       :class="{ 'limite-alcanzado': limiteAlcanzado }"
@@ -78,9 +79,17 @@
       </div>
     </div>
 
-    <!-- Contador -->
-    <div class="contador-info" v-if="!limiteAlcanzado">
+    <!-- Contador (oculto durante generación) -->
+    <div v-show="!generando" class="contador-info" v-if="!limiteAlcanzado">
       <span>Descargas: {{ descargasRestantes }}/{{ limiteDescargas }}</span>
+    </div>
+
+    <!-- Overlay de carga durante generación -->
+    <div v-if="generando" class="generando-overlay">
+      <div class="generando-contenido">
+        <div class="spinner-grande"></div>
+        <p>Generando PDF, por favor espere...</p>
+      </div>
     </div>
   </div>
 </template>
@@ -616,6 +625,43 @@ if (import.meta.env.DEV) {
   border-top-color: #fff;
   border-radius: 50%;
   animation: spin 1s linear infinite;
+}
+
+.generando-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.generando-contenido {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+}
+
+.spinner-grande {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(59, 130, 246, 0.2);
+  border-top-color: #3b82f6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 1rem;
+}
+
+.generando-contenido p {
+  font-size: 1.1rem;
+  color: #374151;
+  font-weight: 500;
 }
 
 @keyframes spin { 
