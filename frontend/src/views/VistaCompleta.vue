@@ -442,7 +442,7 @@ if (import.meta.env.DEV) {
 .carta { page-break-after: always; }
 .carta:last-child { page-break-after: auto; }
 
-/* Botón rectangular fijo "Generar PDF" */
+/* estilos para el Botón rectangular fijo "Generar PDF" */
 .pdf-button {
   position: fixed;
   right: 24px;
