@@ -4,7 +4,7 @@
     "type": "module",
     "main": "index.js",
     "scripts": {
-      "start": "node app.js",
+       "start": "node backend/app.js",
       "dev": "nodemon app.js",
       "init-codigos": "node scripts/inicializarCodigos.js",
       "crear-admin": "node scripts/crearAdmin.js"
@@ -23,4 +23,5 @@
       "node": ">=18.0.0"
     }
   }
+
   
