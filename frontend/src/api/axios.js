@@ -15,7 +15,7 @@ const getBaseURL = () => {
 // Crear instancia de axios con configuración dinámica
 const api = axios.create({
   baseURL: getBaseURL(),
-  timeout: 10000,
+  timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -57,3 +57,4 @@ api.interceptors.response.use(
 );
 
 export default api;
+
