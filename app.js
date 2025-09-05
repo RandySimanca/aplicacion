@@ -16,6 +16,8 @@ import datosPersonalesRoute from "./routes/datosPersonales.js";
 import experienciaTotRoutes from "./routes/experienciaTot.js";
 import pdfRoutes from "./routes/pdf.js";
 import idiomasRoutes from "./routes/idiomas.js";
+import firmaServidorRoutes from "./routes/firmaServidor";
+
 
 dotenv.config();
 const app = express();
@@ -45,6 +47,7 @@ app.use("/api/datos-personales", datosPersonalesRoute);
 app.use("/api/pdf", pdfRoutes);
 app.use("/api", hojaRoutes); 
 app.use("/api/idiomas", idiomasRoutes);
+app.use("/api/firma-servidor", firmaServidorRoutes);
 
 // --- Configuración de frontend MEJORADA ---
 const __filename = fileURLToPath(import.meta.url);
@@ -143,3 +146,4 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 export default app;
+
