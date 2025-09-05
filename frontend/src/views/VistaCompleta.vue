@@ -75,9 +75,9 @@
           <!-- Información de debug (solo en desarrollo) -->
           <div v-if="mostrarDebugInfo" class="debug-info">
             <p><strong>Info de Debug:</strong></p>
-            <p>ID Navegador: {{ browserFingerprint.substring(0, 16) }}...</p>
-            <p>ID Dispositivo: {{ deviceId }}</p>
-            <p>Descargas usadas: {{ descargasUsadas }}</p>
+            <p>Huella: {{ browserFingerprint.substring(0, 16) }}...</p>
+            <p>Descargas: {{ descargasUsadas }}/{{ limiteDescargas }}</p>
+            <p>Estado: {{ estadoBloqueo }}</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -89,7 +89,7 @@
       </div>
     </div>
 
-    <!-- Contador visual (opcional - para mostrar al usuario) -->
+    <!-- Contador visual -->
     <div class="contador-info" v-if="!limiteAlcanzado">
       <span class="contador-text">Descargas disponibles: {{ descargasRestantes }}</span>
       <div class="contador-barra">
@@ -118,36 +118,29 @@ const route = useRoute();
 const router = useRouter();
 const usuarioStore = useUsuarioStore();
 
-// Sistema de contador de descargas persistente
-const limiteDescargas = ref(1); // Límite configurable
+// Sistema de contador persistente usando SOLO cookies y fingerprinting
+const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
 const codigoDesbloqueo = ref('');
-const mensajeVerificacion = ref('');
-
-// Identificadores únicos para persistencia
-const deviceId = ref('');
 const browserFingerprint = ref('');
+const estadoBloqueo = ref('desbloqueado');
 const mostrarDebugInfo = ref(false);
 
 // Computed properties
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
-const isAuthenticated = computed(() => {
-  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
-  return usuario && usuario.id && usuario.id !== 'anonimo';
-});
 
 onMounted(async () => {
   const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
   if (datos?.nombre) nombre.value = datos.nombre;
   
-  // Generar identificadores únicos
-  await generarIdentificadores();
+  // Generar huella única del navegador
+  await generarBrowserFingerprint();
   
-  // Cargar contador de descargas
-  cargarContadorDescargas();
+  // Cargar estado desde cookies (NO desde localStorage)
+  cargarEstadoDesCookies();
 
   // Mostrar info debug en desarrollo
   if (import.meta.env.DEV) {
@@ -155,145 +148,187 @@ onMounted(async () => {
   }
 });
 
-// Observar cambios en el estado de autenticación
-watch(() => usuarioStore.usuario, (nuevoUsuario) => {
-  // No resetear contador al cambiar usuario - mantener persistencia
-  console.log('Usuario cambió, manteniendo contador persistente');
-}, { deep: true });
+// No observar cambios de usuario - el bloqueo es independiente de la sesión
+// watch(() => usuarioStore.usuario, () => {
+//   // NO hacer nada - mantener bloqueo independiente de usuario
+// });
 
-// Generar identificadores únicos del navegador y dispositivo
-async function generarIdentificadores() {
-  // Device ID persistente
-  let deviceIdLocal = localStorage.getItem('persistent_device_id');
-  if (!deviceIdLocal) {
-    deviceIdLocal = 'dev_' + generateUniqueId();
-    localStorage.setItem('persistent_device_id', deviceIdLocal);
+// Generar fingerprint único y robusto del navegador
+async function generarBrowserFingerprint() {
+  try {
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    ctx.textBaseline = 'top';
+    ctx.font = '14px Arial';
+    ctx.fillText('PDF Download Lock', 2, 2);
+    
+    // Recolectar información única del navegador/dispositivo
+    const components = [
+      navigator.userAgent,
+      navigator.language,
+      navigator.languages ? navigator.languages.join(',') : '',
+      screen.width + 'x' + screen.height,
+      screen.colorDepth,
+      screen.pixelDepth,
+      new Date().getTimezoneOffset(),
+      navigator.platform,
+      navigator.hardwareConcurrency || 0,
+      navigator.deviceMemory || 0,
+      canvas.toDataURL(),
+      navigator.cookieEnabled,
+      navigator.doNotTrack || '',
+      window.history.length,
+      // Añadir más componentes únicos
+      navigator.maxTouchPoints || 0,
+      window.devicePixelRatio || 1,
+      window.screen.orientation?.type || '',
+    ];
+    
+    // Crear hash único
+    let hash = 0;
+    const combined = components.join('|');
+    for (let i = 0; i < combined.length; i++) {
+      const char = combined.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    
+    browserFingerprint.value = 'bfp_' + Math.abs(hash).toString(36) + '_' + Date.now().toString(36).substring(-4);
+    
+  } catch (error) {
+    console.warn('Error generando fingerprint:', error);
+    // Fallback si hay error
+    browserFingerprint.value = 'bfp_fallback_' + Math.random().toString(36).substring(2, 10);
   }
-  deviceId.value = deviceIdLocal;
-
-  // Browser fingerprint más robusto
-  const fingerprint = await generateBrowserFingerprint();
-  browserFingerprint.value = fingerprint;
 }
 
-// Generar ID único
-function generateUniqueId() {
-  return Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
-}
-
-// Generar fingerprint único del navegador
-async function generateBrowserFingerprint() {
-  const canvas = document.createElement('canvas');
-  const ctx = canvas.getContext('2d');
-  ctx.textBaseline = 'top';
-  ctx.font = '14px Arial';
-  ctx.fillText('Browser fingerprint', 2, 2);
-  
-  const fingerprint = [
-    navigator.userAgent,
-    navigator.language,
-    screen.width + 'x' + screen.height,
-    screen.colorDepth,
-    new Date().getTimezoneOffset(),
-    !!window.sessionStorage,
-    !!window.localStorage,
-    canvas.toDataURL(),
-    navigator.hardwareConcurrency || 'unknown',
-    navigator.deviceMemory || 'unknown'
-  ].join('|');
-  
-  // Crear hash simple del fingerprint
-  let hash = 0;
-  for (let i = 0; i < fingerprint.length; i++) {
-    const char = fingerprint.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convert to 32-bit integer
+// Funciones de manejo de cookies para persistencia máxima
+function setCookiePersistente(name, value, days = 365) {
+  try {
+    const expires = new Date();
+    expires.setTime(expires.getTime() + (days * 24 * 60 * 60 * 1000));
+    
+    // Crear múltiples cookies con diferentes configuraciones para máxima persistencia
+    const configs = [
+      `${name}=${encodeURIComponent(value)}; expires=${expires.toUTCString()}; path=/; SameSite=Strict`,
+      `${name}_bk1=${encodeURIComponent(value)}; expires=${expires.toUTCString()}; path=/; SameSite=Lax`,
+      `${name}_bk2=${encodeURIComponent(value)}; expires=${expires.toUTCString()}; path=/`
+    ];
+    
+    configs.forEach(config => {
+      document.cookie = config;
+    });
+    
+    return true;
+  } catch (error) {
+    console.warn('Error estableciendo cookie:', error);
+    return false;
   }
-  
-  return 'fp_' + Math.abs(hash).toString(36);
 }
 
-// Generar clave única de almacenamiento
-function getStorageKey() {
-  // Combinar múltiples identificadores para máxima persistencia
-  const combinedId = `${browserFingerprint.value}_${deviceId.value}`;
-  return `pdf_downloads_persistent_${combinedId}`;
+function getCookiePersistente(name) {
+  try {
+    // Buscar cookie principal primero
+    let value = getCookie(name);
+    if (value) return value;
+    
+    // Buscar en cookies de respaldo
+    value = getCookie(name + '_bk1');
+    if (value) {
+      // Restaurar cookie principal
+      setCookiePersistente(name, value);
+      return value;
+    }
+    
+    value = getCookie(name + '_bk2');
+    if (value) {
+      // Restaurar cookies
+      setCookiePersistente(name, value);
+      return value;
+    }
+    
+    return null;
+  } catch (error) {
+    console.warn('Error leyendo cookie:', error);
+    return null;
+  }
 }
 
-// Claves de respaldo
-function getBackupKeys() {
-  return [
-    `pdf_downloads_device_${deviceId.value}`,
-    `pdf_downloads_browser_${browserFingerprint.value}`,
-    `pdf_downloads_backup_${deviceId.value.substring(0, 10)}`
-  ];
-}
-
-function cargarContadorDescargas() {
-  const storageKey = getStorageKey();
-  const backupKeys = getBackupKeys();
-  
-  // Intentar cargar desde la clave principal
-  let datos = localStorage.getItem(storageKey);
-  let info = null;
-  
-  if (datos) {
-    info = JSON.parse(datos);
-  } else {
-    // Si no existe la clave principal, buscar en las claves de respaldo
-    for (const backupKey of backupKeys) {
-      const backupData = localStorage.getItem(backupKey);
-      if (backupData) {
-        info = JSON.parse(backupData);
-        // Migrar a la clave principal
-        localStorage.setItem(storageKey, backupData);
-        break;
-      }
+function getCookie(name) {
+  const nameEQ = name + "=";
+  const ca = document.cookie.split(';');
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) === ' ') c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) === 0) {
+      return decodeURIComponent(c.substring(nameEQ.length, c.length));
     }
   }
-  
-  if (info) {
-    descargasUsadas.value = info.usadas || 0;
-    limiteDescargas.value = info.limite || 1;
-    
-    console.log(`Contador cargado: ${descargasUsadas.value}/${limiteDescargas.value}`);
-  } else {
-    console.log('Contador inicializado en 0');
+  return null;
+}
+
+function deleteCookiePersistente(name) {
+  try {
+    const pastDate = 'expires=Thu, 01 Jan 1970 00:00:00 UTC';
+    document.cookie = `${name}=; ${pastDate}; path=/`;
+    document.cookie = `${name}_bk1=; ${pastDate}; path=/`;
+    document.cookie = `${name}_bk2=; ${pastDate}; path=/`;
+  } catch (error) {
+    console.warn('Error eliminando cookies:', error);
   }
 }
 
-function guardarContadorDescargas() {
-  const info = {
+// Cargar estado desde cookies usando la huella del navegador
+function cargarEstadoDesCookies() {
+  if (!browserFingerprint.value) return;
+  
+  const cookieName = `pdf_lock_${browserFingerprint.value}`;
+  const estadoStr = getCookiePersistente(cookieName);
+  
+  if (estadoStr) {
+    try {
+      const estado = JSON.parse(estadoStr);
+      descargasUsadas.value = estado.usadas || 0;
+      limiteDescargas.value = estado.limite || 1;
+      estadoBloqueo.value = estado.bloqueado ? 'bloqueado' : 'desbloqueado';
+      
+      console.log(`Estado cargado desde cookies: ${descargasUsadas.value}/${limiteDescargas.value} - ${estadoBloqueo.value}`);
+    } catch (error) {
+      console.warn('Error parseando estado desde cookies:', error);
+    }
+  } else {
+    console.log('No se encontró estado previo en cookies - primera visita');
+  }
+}
+
+// Guardar estado en cookies
+function guardarEstadoEnCookies() {
+  if (!browserFingerprint.value) return;
+  
+  const estado = {
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
+    bloqueado: descargasUsadas.value >= limiteDescargas.value,
     ultimaDescarga: new Date().toISOString(),
-    browserFingerprint: browserFingerprint.value,
-    deviceId: deviceId.value,
-    version: '2.0' // Para futuras migraciones
+    fingerprint: browserFingerprint.value,
+    version: '4.0'
   };
   
-  const storageKey = getStorageKey();
-  const backupKeys = getBackupKeys();
+  const cookieName = `pdf_lock_${browserFingerprint.value}`;
+  const success = setCookiePersistente(cookieName, JSON.stringify(estado));
   
-  // Guardar en la clave principal
-  localStorage.setItem(storageKey, JSON.stringify(info));
+  estadoBloqueo.value = estado.bloqueado ? 'bloqueado' : 'desbloqueado';
   
-  // Guardar también en claves de respaldo para máxima persistencia
-  backupKeys.forEach(backupKey => {
-    localStorage.setItem(backupKey, JSON.stringify(info));
-  });
-  
-  console.log(`Contador guardado: ${descargasUsadas.value}/${limiteDescargas.value}`);
+  console.log(`Estado guardado en cookies: ${descargasUsadas.value}/${limiteDescargas.value} - ${estadoBloqueo.value} [Success: ${success}]`);
 }
 
 async function generarPDF() {
-  // Verificar límite antes de proceder - siempre mostrar modal si está bloqueado
+  // Verificar límite antes de proceder
   if (limiteAlcanzado.value) {
     mostrarModalLimite.value = true;
     return;
   }
 
-  // Asegurar que el DOM y recursos estén listos
   await nextTick();
   await new Promise(r => setTimeout(r, 150));
   generando.value = true;
@@ -316,11 +351,11 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
       
-    // Incrementar contador y guardar (esto será persistente)
+    // Incrementar contador y guardar en cookies (PERSISTENTE)
     descargasUsadas.value++;
-    guardarContadorDescargas();
+    guardarEstadoEnCookies();
     
-    console.log('PDF generado exitosamente. Contador actualizado.');
+    console.log('PDF generado. Contador persistente actualizado en cookies.');
     
     // Mostrar modal si se alcanzó el límite
     if (limiteAlcanzado.value) {
@@ -354,7 +389,7 @@ async function copiarContacto() {
   }
 }
 
-// Función para verificar el código de desbloqueo
+// Verificar código de desbloqueo
 async function verificarCodigo() {
   const codigo = codigoDesbloqueo.value.trim();
   if (codigo === '') {
@@ -362,95 +397,96 @@ async function verificarCodigo() {
     return;
   }
 
-  // Códigos de desbloqueo válidos
   const codigosValidos = [
     'ADMIN123', 
     'UNLOCK2024', 
     'RANDY123',
     'RESET2024',
-    'PREMIUM2024'
+    'PREMIUM2024',
+    'MASTERKEY2024',
+    'RANDY1324'
   ];
   
-  // Verificar si el código está en la lista
   if (codigosValidos.includes(codigo.toUpperCase())) {
-    // Código válido - resetear contador de forma permanente
+    // Resetear contador
     descargasUsadas.value = 0;
     
-    // Limpiar también todas las claves de respaldo
-    const storageKey = getStorageKey();
-    const backupKeys = getBackupKeys();
+    // LIMPIAR COMPLETAMENTE las cookies persistentes
+    const cookieName = `pdf_lock_${browserFingerprint.value}`;
+    deleteCookiePersistente(cookieName);
     
-    localStorage.removeItem(storageKey);
-    backupKeys.forEach(key => localStorage.removeItem(key));
+    // También limpiar posibles cookies con fingerprints similares
+    const cookies = document.cookie.split(';');
+    cookies.forEach(cookie => {
+      const cookieKey = cookie.split('=')[0].trim();
+      if (cookieKey.includes('pdf_lock_')) {
+        deleteCookiePersistente(cookieKey);
+      }
+    });
     
-    // Guardar el estado reseteado
-    guardarContadorDescargas();
+    // Regenerar fingerprint para evitar rastros
+    await generarBrowserFingerprint();
     
-    alert('¡Código válido! Se han restablecido tus descargas disponibles de forma permanente.');
+    // Guardar estado limpio
+    guardarEstadoEnCookies();
+    
+    alert('¡Código válido! Se han restablecido tus descargas de forma permanente.');
     cerrarModal();
     
-    console.log('Contador reseteado por código válido');
+    console.log('RESETEO COMPLETO: Cookies eliminadas y fingerprint regenerado');
   } else {
-    alert('Código inválido. Por favor intente nuevamente o contacte al administrador.');
+    alert('Código inválido. Contacte al administrador.');
   }
   
-  // Limpiar el campo después de la verificación
   codigoDesbloqueo.value = '';
 }
 
-// Función administrativa para resetear contador (solo desarrollo)
-function resetearContadorAdmin() {
-  const storageKey = getStorageKey();
-  const backupKeys = getBackupKeys();
-  
-  // Limpiar todas las claves
-  localStorage.removeItem(storageKey);
-  backupKeys.forEach(key => localStorage.removeItem(key));
+// Función administrativa (solo desarrollo)
+function resetearCompleto() {
+  // Limpiar TODAS las cookies relacionadas
+  const cookies = document.cookie.split(';');
+  cookies.forEach(cookie => {
+    const cookieKey = cookie.split('=')[0].trim();
+    if (cookieKey.includes('pdf_lock_') || cookieKey.includes('bfp_')) {
+      deleteCookiePersistente(cookieKey);
+    }
+  });
   
   descargasUsadas.value = 0;
-  console.log('Contador administrativo reseteado');
+  estadoBloqueo.value = 'desbloqueado';
+  
+  console.log('RESETEO ADMINISTRATIVO: Todas las cookies de bloqueo eliminadas');
 }
 
-// Función para mostrar todas las claves de almacenamiento (debug)
-function mostrarClavesAlmacenamiento() {
-  const claves = [];
-  for (let i = 0; i < localStorage.length; i++) {
-    const key = localStorage.key(i);
-    if (key && key.includes('pdf_downloads')) {
-      claves.push({
-        key,
-        value: localStorage.getItem(key)
-      });
-    }
-  }
-  console.table(claves);
-  return claves;
-}
-
-// Exponer funciones para uso en consola (desarrollo)
-if (import.meta.env.DEV) {
-  window.resetearContadorPDFAdmin = resetearContadorAdmin;
-  window.mostrarClavesStorage = mostrarClavesAlmacenamiento;
-  window.generarNuevaHuella = generarIdentificadores;
-  window.limpiarTodoStorage = () => {
-    localStorage.clear();
-    sessionStorage.clear();
-    document.cookie.split(";").forEach(function(c) { 
-      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+// Mostrar información de cookies (debug)
+function mostrarInfoCookies() {
+  const cookies = document.cookie.split(';')
+    .filter(cookie => cookie.includes('pdf_lock_'))
+    .map(cookie => {
+      const [key, value] = cookie.split('=');
+      return {
+        key: key.trim(),
+        value: value ? decodeURIComponent(value) : ''
+      };
     });
-    console.log('TODO EL ALMACENAMIENTO LIMPIADO');
-  };
+    
+  console.table(cookies);
+  return cookies;
+}
+
+// Exponer funciones para desarrollo
+if (import.meta.env.DEV) {
+  window.resetearTodoPDF = resetearCompleto;
+  window.mostrarCookiesBloqueo = mostrarInfoCookies;
+  window.regenerarFingerprint = generarBrowserFingerprint;
 }
 </script>
 
 <style>
 .pdf-root { background: #fff; padding: 0.3in; }
-
-/* Fuerza salto de página entre cartas sin crear página en blanco al inicio/fin */
 .carta { page-break-after: always; }
 .carta:last-child { page-break-after: auto; }
 
-/* Botón rectangular fijo "Generar PDF" */
 .pdf-button {
   position: fixed;
   right: 24px;
@@ -500,7 +536,6 @@ if (import.meta.env.DEV) {
 .btn-icon { font-size: 18px; line-height: 1; }
 .btn-text { font-size: 14px; }
 
-/* Contador visual */
 .contador-info {
   position: fixed;
   right: 24px;
@@ -534,7 +569,6 @@ if (import.meta.env.DEV) {
   transition: width 0.3s ease;
 }
 
-/* Modal */
 .modal-overlay {
   position: fixed;
   top: 0;
@@ -738,7 +772,6 @@ if (import.meta.env.DEV) {
   background: #4b5563;
 }
 
-/* Spinner */
 .spinner {
   width: 20px;
   height: 20px;
@@ -763,10 +796,8 @@ if (import.meta.env.DEV) {
   to { transform: translateY(0) scale(1); opacity: 1; }
 }
 
-/* Ocultar elementos marcados solo en generación PDF */
 .generando-pdf .no-imprimir { display: none !important; }
 
-/* Responsive */
 @media (max-width: 768px) {
   .modal-content {
     width: 95%;
