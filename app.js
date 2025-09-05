@@ -16,7 +16,7 @@ import datosPersonalesRoute from "./routes/datosPersonales.js";
 import experienciaTotRoutes from "./routes/experienciaTot.js";
 import pdfRoutes from "./routes/pdf.js";
 import idiomasRoutes from "./routes/idiomas.js";
-import firmaServidorRoutes from "./routes/firmaServidor";
+import firmaServidorRoutes from "./routes/firmaServidor.js";
 
 
 dotenv.config();
@@ -146,4 +146,5 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 export default app;
+
 
