@@ -69,6 +69,7 @@
           <div v-if="showDebug" class="debug-info">
             <p>Método: {{ metodoBloqueo }}</p>
             <p>Estado: {{ bloqueoStatus }}</p>
+            <p>Usuario ID: {{ usuarioId }}</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -95,7 +96,7 @@ const documento = ref(null);
 const generando = ref(false);
 const nombre = ref('Invitado');
 
-// Sistema de bloqueo SIMPLE y EFECTIVO
+// Sistema de bloqueo por usuario
 const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
@@ -103,50 +104,66 @@ const codigoDesbloqueo = ref('');
 const metodoBloqueo = ref('');
 const bloqueoStatus = ref('');
 const showDebug = ref(false);
+const usuarioId = ref(''); // Identificador único por usuario
 
 // Computed
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
-// Clave fija que NUNCA cambia
-const CLAVE_FIJA = 'pdf_download_used_2024';
+// Generar un ID único para el usuario
+const generarIdUsuario = () => {
+  // Si ya existe un ID en localStorage, usarlo
+  let id = localStorage.getItem('usuario_id');
+  
+  // Si no existe, crear uno nuevo
+  if (!id) {
+    // Usar una combinación de timestamp y número aleatorio
+    id = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+    localStorage.setItem('usuario_id', id);
+  }
+  
+  return id;
+};
 
 onMounted(async () => {
   // Cargar usuario
   const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
   if (datos?.nombre) nombre.value = datos.nombre;
   
+  // Generar o obtener ID de usuario
+  usuarioId.value = generarIdUsuario();
+  
   // Debug en desarrollo
   if (import.meta.env.DEV) {
     showDebug.value = true;
   }
   
-  // Cargar estado de bloqueo
+  // Cargar estado de bloqueo para este usuario
   cargarEstadoBloqueo();
 });
 
 // ===================================
-// SISTEMA DE BLOQUEO ULTRA SIMPLE
+// SISTEMA DE BLOQUEO POR USUARIO
 // ===================================
 
 function cargarEstadoBloqueo() {
-  console.log('🔍 Cargando estado de bloqueo...');
+  console.log('🔍 Cargando estado de bloqueo para usuario:', usuarioId.value);
   
   let bloqueado = false;
   let metodo = '';
   
-  // Método 1: localStorage con clave fija
+  // Método 1: localStorage con clave por usuario
   try {
-    const estado1 = localStorage.getItem(CLAVE_FIJA);
+    const estado1 = localStorage.getItem(`pdf_download_${usuarioId.value}`);
     if (estado1 === 'USED') {
       bloqueado = true;
       metodo = 'localStorage';
     }
   } catch (e) {}
   
-  // Método 2: Cookie con clave fija y duración máxima
+  // Método 2: Cookie con clave por usuario
   try {
-    const estado2 = getCookie(CLAVE_FIJA);
+    const estado2 = getCookie(`pdf_download_${usuarioId.value}`);
     if (estado2 === 'USED') {
       bloqueado = true;
       metodo = metodo ? metodo + '+cookie' : 'cookie';
@@ -155,7 +172,7 @@ function cargarEstadoBloqueo() {
   
   // Método 3: sessionStorage (bonus)
   try {
-    const estado3 = sessionStorage.getItem(CLAVE_FIJA);
+    const estado3 = sessionStorage.getItem(`pdf_download_${usuarioId.value}`);
     if (estado3 === 'USED') {
       bloqueado = true;
       metodo = metodo ? metodo + '+session' : 'session';
@@ -177,11 +194,11 @@ function cargarEstadoBloqueo() {
 }
 
 function marcarComoUsado() {
-  console.log('🚫 Marcando como usado en TODOS los métodos...');
+  console.log('🚫 Marcando como usado para usuario:', usuarioId.value);
   
   // Método 1: localStorage (permanente hasta que se borre manualmente)
   try {
-    localStorage.setItem(CLAVE_FIJA, 'USED');
+    localStorage.setItem(`pdf_download_${usuarioId.value}`, 'USED');
     console.log('✅ Marcado en localStorage');
   } catch (e) {
     console.error('❌ Error localStorage:', e);
@@ -191,7 +208,7 @@ function marcarComoUsado() {
   try {
     const fechaExpira = new Date();
     fechaExpira.setFullYear(fechaExpira.getFullYear() + 10);
-    document.cookie = `${CLAVE_FIJA}=USED; expires=${fechaExpira.toUTCString()}; path=/; SameSite=Strict`;
+    document.cookie = `pdf_download_${usuarioId.value}=USED; expires=${fechaExpira.toUTCString()}; path=/; SameSite=Strict`;
     console.log('✅ Marcado en Cookie');
   } catch (e) {
     console.error('❌ Error Cookie:', e);
@@ -199,7 +216,7 @@ function marcarComoUsado() {
   
   // Método 3: sessionStorage (backup para esta sesión)
   try {
-    sessionStorage.setItem(CLAVE_FIJA, 'USED');
+    sessionStorage.setItem(`pdf_download_${usuarioId.value}`, 'USED');
     console.log('✅ Marcado en sessionStorage');
   } catch (e) {
     console.error('❌ Error sessionStorage:', e);
@@ -212,23 +229,23 @@ function marcarComoUsado() {
 }
 
 function limpiarBloqueo() {
-  console.log('🧹 Limpiando TODOS los bloqueos...');
+  console.log('🧹 Limpiando bloqueos para usuario:', usuarioId.value);
   
   // Limpiar localStorage
   try {
-    localStorage.removeItem(CLAVE_FIJA);
+    localStorage.removeItem(`pdf_download_${usuarioId.value}`);
     console.log('✅ localStorage limpio');
   } catch (e) {}
   
   // Limpiar cookie
   try {
-    document.cookie = `${CLAVE_FIJA}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    document.cookie = `pdf_download_${usuarioId.value}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
     console.log('✅ Cookie limpia');
   } catch (e) {}
   
   // Limpiar sessionStorage
   try {
-    sessionStorage.removeItem(CLAVE_FIJA);
+    sessionStorage.removeItem(`pdf_download_${usuarioId.value}`);
     console.log('✅ sessionStorage limpio');
   } catch (e) {}
   
@@ -286,10 +303,10 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
     
-    // MARCAR INMEDIATAMENTE como usado
+    // MARCAR INMEDIATAMENTE como usado para este usuario
     marcarComoUsado();
     
-    console.log('📄 PDF generado y bloqueo activado');
+    console.log('📄 PDF generado y bloqueo activado para usuario:', usuarioId.value);
     
     // Mostrar modal después de un momento
     setTimeout(() => {
@@ -319,7 +336,7 @@ function verificarCodigo() {
     limpiarBloqueo();
     alert('✅ Código válido. Bloqueo eliminado.');
     cerrarModal();
-    console.log('🔓 Bloqueo eliminado con código');
+    console.log('🔓 Bloqueo eliminado con código para usuario:', usuarioId.value);
   } else {
     alert('❌ Código inválido');
   }
@@ -338,10 +355,10 @@ if (import.meta.env.DEV) {
   window.limpiarBloqueo = limpiarBloqueo;
   window.marcarUsado = marcarComoUsado;
   window.verificarEstado = () => {
-    console.log('📊 Estado actual:');
-    console.log('localStorage:', localStorage.getItem(CLAVE_FIJA));
-    console.log('cookie:', getCookie(CLAVE_FIJA));
-    console.log('sessionStorage:', sessionStorage.getItem(CLAVE_FIJA));
+    console.log('📊 Estado actual para usuario:', usuarioId.value);
+    console.log('localStorage:', localStorage.getItem(`pdf_download_${usuarioId.value}`));
+    console.log('cookie:', getCookie(`pdf_download_${usuarioId.value}`));
+    console.log('sessionStorage:', sessionStorage.getItem(`pdf_download_${usuarioId.value}`));
     console.log('descargasUsadas:', descargasUsadas.value);
     console.log('limiteAlcanzado:', limiteAlcanzado.value);
   };
