@@ -432,6 +432,14 @@ if (import.meta.env.DEV) {
   window.resetearContadorPDFAdmin = resetearContadorAdmin;
   window.mostrarClavesStorage = mostrarClavesAlmacenamiento;
   window.generarNuevaHuella = generarIdentificadores;
+  window.limpiarTodoStorage = () => {
+    localStorage.clear();
+    sessionStorage.clear();
+    document.cookie.split(";").forEach(function(c) { 
+      document.cookie = c.replace(/^ +/, "").replace(/=.*/, "=;expires=" + new Date().toUTCString() + ";path=/"); 
+    });
+    console.log('TODO EL ALMACENAMIENTO LIMPIADO');
+  };
 }
 </script>
 
@@ -442,7 +450,7 @@ if (import.meta.env.DEV) {
 .carta { page-break-after: always; }
 .carta:last-child { page-break-after: auto; }
 
-/* estilos para el Botón rectangular fijo "Generar PDF" */
+/* Botón rectangular fijo "Generar PDF" */
 .pdf-button {
   position: fixed;
   right: 24px;
