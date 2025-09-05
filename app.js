@@ -49,9 +49,9 @@ app.use("/api/idiomas", idiomasRoutes);
 // --- Configuración de frontend ---
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const frontendDistPath = path.resolve(__dirname, "../frontend/dist/index.html");
+const frontendDistPath = path.resolve(__dirname, "../frontend/dist");
 
-// Servir archivos estáticos del frontend
+// Servir archivos estáticos del frontend (carpeta, no archivo)
 app.use(express.static(frontendDistPath));
 
 // Redirigir todas las rutas que no sean /api a index.html (para Vue Router)
@@ -69,6 +69,7 @@ app.listen(PORT, "0.0.0.0", () => {
 });
 
 export default app;
+
 
 
 
