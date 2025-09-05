@@ -35,7 +35,7 @@
           <button @click="cerrarModal" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <p>Has alcanzado el límite de <strong>{{ limiteDescargas }} descarga</strong> gratuita.</p>
+          <p>Has alcanzado el límite de <strong>{{ limiteDescargas }} descarga</strong> gratuita para tu usuario <strong>{{ nombre }}</strong>.</p>
           
           <div class="contact-info">
             <div class="contact-item">
@@ -53,7 +53,7 @@
           </div>
           
           <div class="codigo-desbloqueo">
-            <label>Código de desbloqueo:</label>
+            <label>Código de desbloqueo para {{ nombre }}:</label>
             <input 
               v-model="codigoDesbloqueo" 
               placeholder="Ingrese el código" 
@@ -67,6 +67,8 @@
           
           <!-- Debug info -->
           <div v-if="showDebug" class="debug-info">
+            <p>Usuario ID: {{ usuarioId }}</p>
+            <p>Usuario Hash: {{ usuarioHash }}</p>
             <p>Método: {{ metodoBloqueo }}</p>
             <p>Estado: {{ bloqueoStatus }}</p>
           </div>
@@ -79,7 +81,7 @@
 
     <!-- Contador -->
     <div class="contador-info" v-if="!limiteAlcanzado">
-      <span>Descargas: {{ descargasRestantes }}/{{ limiteDescargas }}</span>
+      <span>{{ nombre }}: {{ descargasRestantes }}/{{ limiteDescargas }}</span>
     </div>
   </div>
 </template>
@@ -95,7 +97,7 @@ const documento = ref(null);
 const generando = ref(false);
 const nombre = ref('Invitado');
 
-// Sistema de bloqueo SIMPLE y EFECTIVO
+// Sistema de bloqueo POR USUARIO
 const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
@@ -104,103 +106,210 @@ const metodoBloqueo = ref('');
 const bloqueoStatus = ref('');
 const showDebug = ref(false);
 
+// Identificación única del usuario
+const usuarioId = ref('');
+const usuarioHash = ref('');
+
 // Computed
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
-// Clave fija que NUNCA cambia
-const CLAVE_FIJA = 'pdf_download_used_2024';
-
 onMounted(async () => {
-  // Cargar usuario
-  const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
-  if (datos?.nombre) nombre.value = datos.nombre;
+  // Cargar e inicializar usuario
+  await inicializarUsuario();
   
   // Debug en desarrollo
   if (import.meta.env.DEV) {
     showDebug.value = true;
   }
   
-  // Cargar estado de bloqueo
+  // Cargar estado de bloqueo específico del usuario
   cargarEstadoBloqueo();
 });
 
 // ===================================
-// SISTEMA DE BLOQUEO ULTRA SIMPLE
+// SISTEMA DE IDENTIFICACIÓN DE USUARIO
 // ===================================
 
-function cargarEstadoBloqueo() {
-  console.log('🔍 Cargando estado de bloqueo...');
+async function inicializarUsuario() {
+  console.log('👤 Inicializando usuario...');
   
+  // Cargar datos del usuario desde localStorage
+  const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
+  
+  if (datos?.nombre) {
+    nombre.value = datos.nombre.trim();
+  }
+  
+  // Generar ID único del usuario basado en múltiples factores
+  usuarioId.value = await generarIdUsuario(nombre.value);
+  usuarioHash.value = await hashString(usuarioId.value);
+  
+  console.log(`👤 Usuario inicializado: ${nombre.value} (ID: ${usuarioId.value})`);
+}
+
+async function generarIdUsuario(nombreUsuario) {
+  // Combinar múltiples factores para crear un ID único y estable
+  const factores = [
+    nombreUsuario || 'anonimo',
+    navigator.userAgent,
+    navigator.language,
+    screen.width + 'x' + screen.height,
+    Intl.DateTimeFormat().resolvedOptions().timeZone,
+    // Agregar timestamp de primera visita para mayor unicidad
+    getOrCreateUserTimestamp()
+  ];
+  
+  const combinado = factores.join('|');
+  return await hashString(combinado);
+}
+
+function getOrCreateUserTimestamp() {
+  const key = 'user_first_visit';
+  let timestamp = localStorage.getItem(key);
+  
+  if (!timestamp) {
+    timestamp = Date.now().toString();
+    try {
+      localStorage.setItem(key, timestamp);
+    } catch (e) {
+      // Si falla localStorage, usar timestamp actual
+      timestamp = Date.now().toString();
+    }
+  }
+  
+  return timestamp;
+}
+
+async function hashString(str) {
+  // Crear hash usando Web Crypto API
+  try {
+    const encoder = new TextEncoder();
+    const data = encoder.encode(str);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16);
+  } catch (e) {
+    // Fallback si crypto no está disponible
+    console.warn('Crypto API no disponible, usando hash simple');
+    return simpleHash(str);
+  }
+}
+
+function simpleHash(str) {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convertir a 32-bit integer
+  }
+  return Math.abs(hash).toString(16).substring(0, 16);
+}
+
+// ===================================
+// SISTEMA DE BLOQUEO POR USUARIO
+// ===================================
+
+function obtenerClaveUsuario() {
+  // Crear claves específicas del usuario
+  return {
+    localStorage: `pdf_used_${usuarioHash.value}`,
+    cookie: `pdf_used_${usuarioHash.value}`,
+    sessionStorage: `pdf_used_${usuarioHash.value}`
+  };
+}
+
+function cargarEstadoBloqueo() {
+  if (!usuarioHash.value) {
+    console.warn('⚠️ Hash de usuario no disponible');
+    return;
+  }
+  
+  console.log(`🔍 Cargando estado de bloqueo para usuario: ${nombre.value}`);
+  
+  const claves = obtenerClaveUsuario();
   let bloqueado = false;
   let metodo = '';
   
-  // Método 1: localStorage con clave fija
+  // Método 1: localStorage específico del usuario
   try {
-    const estado1 = localStorage.getItem(CLAVE_FIJA);
+    const estado1 = localStorage.getItem(claves.localStorage);
     if (estado1 === 'USED') {
       bloqueado = true;
       metodo = 'localStorage';
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Error accediendo localStorage:', e);
+  }
   
-  // Método 2: Cookie con clave fija y duración máxima
+  // Método 2: Cookie específica del usuario
   try {
-    const estado2 = getCookie(CLAVE_FIJA);
+    const estado2 = getCookie(claves.cookie);
     if (estado2 === 'USED') {
       bloqueado = true;
       metodo = metodo ? metodo + '+cookie' : 'cookie';
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Error accediendo cookie:', e);
+  }
   
-  // Método 3: sessionStorage (bonus)
+  // Método 3: sessionStorage específico del usuario
   try {
-    const estado3 = sessionStorage.getItem(CLAVE_FIJA);
+    const estado3 = sessionStorage.getItem(claves.sessionStorage);
     if (estado3 === 'USED') {
       bloqueado = true;
       metodo = metodo ? metodo + '+session' : 'session';
     }
-  } catch (e) {}
+  } catch (e) {
+    console.warn('Error accediendo sessionStorage:', e);
+  }
   
   // Aplicar estado
   if (bloqueado) {
     descargasUsadas.value = 1;
     bloqueoStatus.value = 'BLOQUEADO';
-    console.log(`🔒 Estado bloqueado encontrado via: ${metodo}`);
+    console.log(`🔒 Usuario ${nombre.value} bloqueado via: ${metodo}`);
   } else {
     descargasUsadas.value = 0;
     bloqueoStatus.value = 'LIBRE';
-    console.log('✅ Sin bloqueos encontrados');
+    console.log(`✅ Usuario ${nombre.value} sin bloqueos`);
   }
   
   metodoBloqueo.value = metodo || 'ninguno';
 }
 
 function marcarComoUsado() {
-  console.log('🚫 Marcando como usado en TODOS los métodos...');
+  if (!usuarioHash.value) {
+    console.error('❌ No se puede marcar como usado: hash de usuario no disponible');
+    return;
+  }
   
-  // Método 1: localStorage (permanente hasta que se borre manualmente)
+  console.log(`🚫 Marcando como usado para usuario: ${nombre.value}`);
+  
+  const claves = obtenerClaveUsuario();
+  
+  // Método 1: localStorage específico del usuario
   try {
-    localStorage.setItem(CLAVE_FIJA, 'USED');
-    console.log('✅ Marcado en localStorage');
+    localStorage.setItem(claves.localStorage, 'USED');
+    console.log('✅ Marcado en localStorage específico');
   } catch (e) {
     console.error('❌ Error localStorage:', e);
   }
   
-  // Método 2: Cookie ultra persistente (10 años)
+  // Método 2: Cookie específica del usuario (10 años)
   try {
     const fechaExpira = new Date();
     fechaExpira.setFullYear(fechaExpira.getFullYear() + 10);
-    document.cookie = `${CLAVE_FIJA}=USED; expires=${fechaExpira.toUTCString()}; path=/; SameSite=Strict`;
-    console.log('✅ Marcado en Cookie');
+    document.cookie = `${claves.cookie}=USED; expires=${fechaExpira.toUTCString()}; path=/; SameSite=Strict`;
+    console.log('✅ Marcado en Cookie específica');
   } catch (e) {
     console.error('❌ Error Cookie:', e);
   }
   
-  // Método 3: sessionStorage (backup para esta sesión)
+  // Método 3: sessionStorage específico del usuario
   try {
-    sessionStorage.setItem(CLAVE_FIJA, 'USED');
-    console.log('✅ Marcado en sessionStorage');
+    sessionStorage.setItem(claves.sessionStorage, 'USED');
+    console.log('✅ Marcado en sessionStorage específico');
   } catch (e) {
     console.error('❌ Error sessionStorage:', e);
   }
@@ -212,25 +321,38 @@ function marcarComoUsado() {
 }
 
 function limpiarBloqueo() {
-  console.log('🧹 Limpiando TODOS los bloqueos...');
+  if (!usuarioHash.value) {
+    console.error('❌ No se puede limpiar: hash de usuario no disponible');
+    return;
+  }
   
-  // Limpiar localStorage
-  try {
-    localStorage.removeItem(CLAVE_FIJA);
-    console.log('✅ localStorage limpio');
-  } catch (e) {}
+  console.log(`🧹 Limpiando bloqueo para usuario: ${nombre.value}`);
   
-  // Limpiar cookie
-  try {
-    document.cookie = `${CLAVE_FIJA}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
-    console.log('✅ Cookie limpia');
-  } catch (e) {}
+  const claves = obtenerClaveUsuario();
   
-  // Limpiar sessionStorage
+  // Limpiar localStorage específico
   try {
-    sessionStorage.removeItem(CLAVE_FIJA);
-    console.log('✅ sessionStorage limpio');
-  } catch (e) {}
+    localStorage.removeItem(claves.localStorage);
+    console.log('✅ localStorage específico limpio');
+  } catch (e) {
+    console.warn('Error limpiando localStorage:', e);
+  }
+  
+  // Limpiar cookie específica
+  try {
+    document.cookie = `${claves.cookie}=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/`;
+    console.log('✅ Cookie específica limpia');
+  } catch (e) {
+    console.warn('Error limpiando cookie:', e);
+  }
+  
+  // Limpiar sessionStorage específico
+  try {
+    sessionStorage.removeItem(claves.sessionStorage);
+    console.log('✅ sessionStorage específico limpio');
+  } catch (e) {
+    console.warn('Error limpiando sessionStorage:', e);
+  }
   
   // Resetear estado
   descargasUsadas.value = 0;
@@ -258,6 +380,13 @@ function getCookie(nombre) {
 // ===================================
 
 async function generarPDF() {
+  // Verificar que el usuario esté inicializado
+  if (!usuarioHash.value) {
+    console.error('❌ Usuario no inicializado');
+    alert('Error: Usuario no inicializado. Recarga la página.');
+    return;
+  }
+  
   // Verificar límite
   if (limiteAlcanzado.value) {
     mostrarModalLimite.value = true;
@@ -286,10 +415,10 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
     
-    // MARCAR INMEDIATAMENTE como usado
+    // MARCAR INMEDIATAMENTE como usado para este usuario específico
     marcarComoUsado();
     
-    console.log('📄 PDF generado y bloqueo activado');
+    console.log(`📄 PDF generado y bloqueo activado para ${nombreUsuario}`);
     
     // Mostrar modal después de un momento
     setTimeout(() => {
@@ -300,6 +429,7 @@ async function generarPDF() {
       
   } catch (error) {
     console.error('❌ Error generando PDF:', error);
+    alert('Error generando PDF. Intenta de nuevo.');
   } finally {
     generando.value = false;
   }
@@ -308,20 +438,29 @@ async function generarPDF() {
 function verificarCodigo() {
   const codigo = codigoDesbloqueo.value.trim().toUpperCase();
   
-  const codigosValidos = [
+  // Códigos específicos por usuario (opcional)
+  const codigosGlobales = [
     'ADMIN123',
     'RESET2024', 
     'RANDY123',
     'UNLOCK'
   ];
   
+  // Código específico del usuario actual
+  const codigoUsuarioEspecifico = `UNLOCK_${usuarioHash.value.substring(0, 8).toUpperCase()}`;
+  
+  const codigosValidos = [...codigosGlobales, codigoUsuarioEspecifico];
+  
   if (codigosValidos.includes(codigo)) {
     limpiarBloqueo();
-    alert('✅ Código válido. Bloqueo eliminado.');
+    alert(`✅ Código válido. Bloqueo eliminado para ${nombre.value}.`);
     cerrarModal();
-    console.log('🔓 Bloqueo eliminado con código');
+    console.log(`🔓 Bloqueo eliminado con código para ${nombre.value}`);
   } else {
     alert('❌ Código inválido');
+    if (showDebug.value) {
+      console.log(`💡 Código específico para este usuario: ${codigoUsuarioEspecifico}`);
+    }
   }
   
   codigoDesbloqueo.value = '';
@@ -332,23 +471,47 @@ function cerrarModal() {
   codigoDesbloqueo.value = '';
 }
 
-// Funciones de desarrollo
+// ===================================
+// FUNCIONES DE DESARROLLO Y DEBUG
+// ===================================
+
 if (import.meta.env.DEV) {
   // Exponer funciones globales para testing
-  window.limpiarBloqueo = limpiarBloqueo;
-  window.marcarUsado = marcarComoUsado;
-  window.verificarEstado = () => {
-    console.log('📊 Estado actual:');
-    console.log('localStorage:', localStorage.getItem(CLAVE_FIJA));
-    console.log('cookie:', getCookie(CLAVE_FIJA));
-    console.log('sessionStorage:', sessionStorage.getItem(CLAVE_FIJA));
+  window.limpiarBloqueoPorUsuario = limpiarBloqueo;
+  window.marcarUsadoPorUsuario = marcarComoUsado;
+  window.verificarEstadoPorUsuario = () => {
+    const claves = obtenerClaveUsuario();
+    console.log('📊 Estado actual del usuario:');
+    console.log('Usuario:', nombre.value);
+    console.log('Usuario ID:', usuarioId.value);
+    console.log('Usuario Hash:', usuarioHash.value);
+    console.log('localStorage:', localStorage.getItem(claves.localStorage));
+    console.log('cookie:', getCookie(claves.cookie));
+    console.log('sessionStorage:', sessionStorage.getItem(claves.sessionStorage));
     console.log('descargasUsadas:', descargasUsadas.value);
     console.log('limiteAlcanzado:', limiteAlcanzado.value);
+    console.log('Código específico usuario:', `UNLOCK_${usuarioHash.value.substring(0, 8).toUpperCase()}`);
+  };
+  
+  window.cambiarUsuario = (nuevoNombre) => {
+    localStorage.setItem('usuario', JSON.stringify({ nombre: nuevoNombre }));
+    location.reload();
+  };
+  
+  window.listarTodosLosBloqueos = () => {
+    console.log('🗂️ Todos los bloqueos en localStorage:');
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('pdf_used_')) {
+        console.log(`${key}: ${localStorage.getItem(key)}`);
+      }
+    }
   };
 }
 </script>
 
 <style scoped>
+/* Mantener todos los estilos originales */
 .pdf-root { 
   background: #fff; 
   padding: 0.3in; 
