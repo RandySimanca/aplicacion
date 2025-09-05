@@ -63,11 +63,22 @@
               v-model="codigoDesbloqueo" 
               placeholder="Ingrese el código proporcionado" 
               class="codigo-input"
+              @keyup.enter="verificarCodigo"
             />
-            <button @click="verificarCodigo" class="btn-verificar">Verificar</button>
+            <button @click="verificarCodigo" class="btn-verificar" :disabled="!codigoDesbloqueo.trim()">
+              Verificar
+            </button>
           </div>
           
           <p class="note">El administrador podrá restablecer tu contador de descargas o proporcionarte un código de desbloqueo.</p>
+          
+          <!-- Información de debug (solo en desarrollo) -->
+          <div v-if="mostrarDebugInfo" class="debug-info">
+            <p><strong>Info de Debug:</strong></p>
+            <p>ID Navegador: {{ browserFingerprint.substring(0, 16) }}...</p>
+            <p>ID Dispositivo: {{ deviceId }}</p>
+            <p>Descargas usadas: {{ descargasUsadas }}</p>
+          </div>
         </div>
         <div class="modal-footer">
           <button @click="cerrarModal" class="btn-secondary">Cerrar</button>
@@ -107,7 +118,7 @@ const route = useRoute();
 const router = useRouter();
 const usuarioStore = useUsuarioStore();
 
-// Sistema de contador de descargas
+// Sistema de contador de descargas persistente
 const limiteDescargas = ref(1); // Límite configurable
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
@@ -115,101 +126,164 @@ const textoCopiado = ref(false);
 const codigoDesbloqueo = ref('');
 const mensajeVerificacion = ref('');
 
-// Identificador único para el dispositivo
+// Identificadores únicos para persistencia
 const deviceId = ref('');
+const browserFingerprint = ref('');
+const mostrarDebugInfo = ref(false);
 
 // Computed properties
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 const isAuthenticated = computed(() => {
-  const usuario = JSON.parse(localStorage.getItem('usuario'));
+  const usuario = JSON.parse(localStorage.getItem('usuario') || '{}');
   return usuario && usuario.id && usuario.id !== 'anonimo';
 });
 
-onMounted(() => {
-  const datos = JSON.parse(localStorage.getItem('usuario'));
+onMounted(async () => {
+  const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
   if (datos?.nombre) nombre.value = datos.nombre;
   
-  // Generar o obtener ID único del dispositivo
-  obtenerDeviceId();
+  // Generar identificadores únicos
+  await generarIdentificadores();
   
   // Cargar contador de descargas
   cargarContadorDescargas();
+
+  // Mostrar info debug en desarrollo
+  if (import.meta.env.DEV) {
+    mostrarDebugInfo.value = true;
+  }
 });
 
 // Observar cambios en el estado de autenticación
 watch(() => usuarioStore.usuario, (nuevoUsuario) => {
-  if (nuevoUsuario) {
-    // El usuario ha iniciado sesión, cargar su contador
-    cargarContadorDescargas();
-  }
+  // No resetear contador al cambiar usuario - mantener persistencia
+  console.log('Usuario cambió, manteniendo contador persistente');
 }, { deep: true });
 
-// Generar o obtener un ID único para el dispositivo
-function obtenerDeviceId() {
-  let id = localStorage.getItem('device_id');
-  if (!id) {
-    // Generar un ID único si no existe
-    id = 'device_' + Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    localStorage.setItem('device_id', id);
+// Generar identificadores únicos del navegador y dispositivo
+async function generarIdentificadores() {
+  // Device ID persistente
+  let deviceIdLocal = localStorage.getItem('persistent_device_id');
+  if (!deviceIdLocal) {
+    deviceIdLocal = 'dev_' + generateUniqueId();
+    localStorage.setItem('persistent_device_id', deviceIdLocal);
   }
-  deviceId.value = id;
+  deviceId.value = deviceIdLocal;
+
+  // Browser fingerprint más robusto
+  const fingerprint = await generateBrowserFingerprint();
+  browserFingerprint.value = fingerprint;
+}
+
+// Generar ID único
+function generateUniqueId() {
+  return Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
+}
+
+// Generar fingerprint único del navegador
+async function generateBrowserFingerprint() {
+  const canvas = document.createElement('canvas');
+  const ctx = canvas.getContext('2d');
+  ctx.textBaseline = 'top';
+  ctx.font = '14px Arial';
+  ctx.fillText('Browser fingerprint', 2, 2);
+  
+  const fingerprint = [
+    navigator.userAgent,
+    navigator.language,
+    screen.width + 'x' + screen.height,
+    screen.colorDepth,
+    new Date().getTimezoneOffset(),
+    !!window.sessionStorage,
+    !!window.localStorage,
+    canvas.toDataURL(),
+    navigator.hardwareConcurrency || 'unknown',
+    navigator.deviceMemory || 'unknown'
+  ].join('|');
+  
+  // Crear hash simple del fingerprint
+  let hash = 0;
+  for (let i = 0; i < fingerprint.length; i++) {
+    const char = fingerprint.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32-bit integer
+  }
+  
+  return 'fp_' + Math.abs(hash).toString(36);
+}
+
+// Generar clave única de almacenamiento
+function getStorageKey() {
+  // Combinar múltiples identificadores para máxima persistencia
+  const combinedId = `${browserFingerprint.value}_${deviceId.value}`;
+  return `pdf_downloads_persistent_${combinedId}`;
+}
+
+// Claves de respaldo
+function getBackupKeys() {
+  return [
+    `pdf_downloads_device_${deviceId.value}`,
+    `pdf_downloads_browser_${browserFingerprint.value}`,
+    `pdf_downloads_backup_${deviceId.value.substring(0, 10)}`
+  ];
 }
 
 function cargarContadorDescargas() {
-  // Primero intentar cargar por usuario si está autenticado
-  const usuario = JSON.parse(localStorage.getItem('usuario'));
+  const storageKey = getStorageKey();
+  const backupKeys = getBackupKeys();
   
-  if (usuario?.id) {
-    // Usuario autenticado - cargar por ID de usuario
-    const key = `descargas_pdf_${usuario.id}`;
-    const datos = localStorage.getItem(key);
-    
-    if (datos) {
-      const info = JSON.parse(datos);
-      descargasUsadas.value = info.usadas || 0;
-      limiteDescargas.value = info.limite || 1;
-      return;
+  // Intentar cargar desde la clave principal
+  let datos = localStorage.getItem(storageKey);
+  let info = null;
+  
+  if (datos) {
+    info = JSON.parse(datos);
+  } else {
+    // Si no existe la clave principal, buscar en las claves de respaldo
+    for (const backupKey of backupKeys) {
+      const backupData = localStorage.getItem(backupKey);
+      if (backupData) {
+        info = JSON.parse(backupData);
+        // Migrar a la clave principal
+        localStorage.setItem(storageKey, backupData);
+        break;
+      }
     }
   }
   
-  // Si no hay usuario autenticado, cargar por dispositivo
-  const key = `descargas_pdf_device_${deviceId.value}`;
-  const datos = localStorage.getItem(key);
-  
-  if (datos) {
-    const info = JSON.parse(datos);
+  if (info) {
     descargasUsadas.value = info.usadas || 0;
     limiteDescargas.value = info.limite || 1;
+    
+    console.log(`Contador cargado: ${descargasUsadas.value}/${limiteDescargas.value}`);
+  } else {
+    console.log('Contador inicializado en 0');
   }
 }
 
 function guardarContadorDescargas() {
-  const usuario = JSON.parse(localStorage.getItem('usuario'));
-  
-  if (usuario?.id) {
-    // Guardar por ID de usuario si está autenticado
-    const key = `descargas_pdf_${usuario.id}`;
-    const info = {
-      usadas: descargasUsadas.value,
-      limite: limiteDescargas.value,
-      ultimaDescarga: new Date().toISOString(),
-      deviceId: deviceId.value // Registrar también el dispositivo
-    };
-    
-    localStorage.setItem(key, JSON.stringify(info));
-  }
-  
-  // Siempre guardar también por dispositivo
-  const deviceKey = `descargas_pdf_device_${deviceId.value}`;
-  const deviceInfo = {
+  const info = {
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
     ultimaDescarga: new Date().toISOString(),
-    userId: usuario?.id || 'anonimo'
+    browserFingerprint: browserFingerprint.value,
+    deviceId: deviceId.value,
+    version: '2.0' // Para futuras migraciones
   };
   
-  localStorage.setItem(deviceKey, JSON.stringify(deviceInfo));
+  const storageKey = getStorageKey();
+  const backupKeys = getBackupKeys();
+  
+  // Guardar en la clave principal
+  localStorage.setItem(storageKey, JSON.stringify(info));
+  
+  // Guardar también en claves de respaldo para máxima persistencia
+  backupKeys.forEach(backupKey => {
+    localStorage.setItem(backupKey, JSON.stringify(info));
+  });
+  
+  console.log(`Contador guardado: ${descargasUsadas.value}/${limiteDescargas.value}`);
 }
 
 async function generarPDF() {
@@ -242,9 +316,11 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
       
-    // Incrementar contador y guardar
+    // Incrementar contador y guardar (esto será persistente)
     descargasUsadas.value++;
     guardarContadorDescargas();
+    
+    console.log('PDF generado exitosamente. Contador actualizado.');
     
     // Mostrar modal si se alcanzó el límite
     if (limiteAlcanzado.value) {
@@ -263,6 +339,7 @@ async function generarPDF() {
 function cerrarModal() {
   mostrarModalLimite.value = false;
   textoCopiado.value = false;
+  codigoDesbloqueo.value = '';
 }
 
 async function copiarContacto() {
@@ -279,51 +356,82 @@ async function copiarContacto() {
 
 // Función para verificar el código de desbloqueo
 async function verificarCodigo() {
-  if (codigoDesbloqueo.value.trim() === '') {
+  const codigo = codigoDesbloqueo.value.trim();
+  if (codigo === '') {
     alert('Por favor ingrese un código de desbloqueo');
     return;
   }
+
+  // Códigos de desbloqueo válidos
+  const codigosValidos = [
+    'ADMIN123', 
+    'UNLOCK2024', 
+    'RANDY123',
+    'RESET2024',
+    'PREMIUM2024'
+  ];
   
-  try {
-    // Llamar a la API del backend para verificar el código
-    const response = await fetch('/api/codigo-desbloqueo/verificar', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ codigo: codigoDesbloqueo.value.trim() })
-    });
+  // Verificar si el código está en la lista
+  if (codigosValidos.includes(codigo.toUpperCase())) {
+    // Código válido - resetear contador de forma permanente
+    descargasUsadas.value = 0;
     
-    const data = await response.json();
+    // Limpiar también todas las claves de respaldo
+    const storageKey = getStorageKey();
+    const backupKeys = getBackupKeys();
     
-    if (response.ok) {
-      // Código válido - resetear contador
-      descargasUsadas.value = 0;
-      guardarContadorDescargas();
-      alert('¡Código válido! Se han restablecido tus descargas disponibles.');
-      cerrarModal();
-    } else {
-      // Código inválido o error
-      alert(data.mensaje || 'Código inválido. Por favor intente nuevamente o contacte al administrador.');
-    }
-  } catch (error) {
-    console.error('Error al verificar código:', error);
-    alert('Error al verificar el código. Por favor intente nuevamente.');
+    localStorage.removeItem(storageKey);
+    backupKeys.forEach(key => localStorage.removeItem(key));
+    
+    // Guardar el estado reseteado
+    guardarContadorDescargas();
+    
+    alert('¡Código válido! Se han restablecido tus descargas disponibles de forma permanente.');
+    cerrarModal();
+    
+    console.log('Contador reseteado por código válido');
+  } else {
+    alert('Código inválido. Por favor intente nuevamente o contacte al administrador.');
   }
   
   // Limpiar el campo después de la verificación
   codigoDesbloqueo.value = '';
 }
 
-// Función para que el admin pueda resetear el contador (solo para desarrollo/testing)
-function resetearContador() {
+// Función administrativa para resetear contador (solo desarrollo)
+function resetearContadorAdmin() {
+  const storageKey = getStorageKey();
+  const backupKeys = getBackupKeys();
+  
+  // Limpiar todas las claves
+  localStorage.removeItem(storageKey);
+  backupKeys.forEach(key => localStorage.removeItem(key));
+  
   descargasUsadas.value = 0;
-  guardarContadorDescargas();
+  console.log('Contador administrativo reseteado');
 }
 
-// Exponer función para uso en consola (desarrollo)
+// Función para mostrar todas las claves de almacenamiento (debug)
+function mostrarClavesAlmacenamiento() {
+  const claves = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.includes('pdf_downloads')) {
+      claves.push({
+        key,
+        value: localStorage.getItem(key)
+      });
+    }
+  }
+  console.table(claves);
+  return claves;
+}
+
+// Exponer funciones para uso en consola (desarrollo)
 if (import.meta.env.DEV) {
-  window.resetearContadorPDF = resetearContador;
+  window.resetearContadorPDFAdmin = resetearContadorAdmin;
+  window.mostrarClavesStorage = mostrarClavesAlmacenamiento;
+  window.generarNuevaHuella = generarIdentificadores;
 }
 </script>
 
@@ -439,7 +547,7 @@ if (import.meta.env.DEV) {
   max-width: 500px;
   width: 90%;
   max-height: 90vh;
-  overflow: hidden;
+  overflow-y: auto;
   box-shadow: 0 20px 40px rgba(0,0,0,0.3);
   animation: slideIn 0.3s ease;
 }
@@ -541,6 +649,7 @@ if (import.meta.env.DEV) {
   margin-bottom: 0.75rem;
   font-size: 1rem;
   transition: border-color 0.2s ease;
+  box-sizing: border-box;
 }
 
 .codigo-input:focus {
@@ -561,8 +670,27 @@ if (import.meta.env.DEV) {
   transition: background 0.2s ease;
 }
 
-.btn-verificar:hover {
+.btn-verificar:hover:not(:disabled) {
   background: #059669;
+}
+
+.btn-verificar:disabled {
+  background: #9ca3af;
+  cursor: not-allowed;
+}
+
+.debug-info {
+  margin-top: 1rem;
+  padding: 0.75rem;
+  background: #fef3c7;
+  border-radius: 6px;
+  border: 1px solid #f59e0b;
+  font-size: 0.75rem;
+}
+
+.debug-info p {
+  margin: 0.25rem 0;
+  font-family: monospace;
 }
 
 .modal-footer {
