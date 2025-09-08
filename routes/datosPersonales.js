@@ -1,5 +1,4 @@
 //backend/routes/datosPersonales.js
-
 import express from "express";
 import { crearDatosPersonales } from "../controllers/datosPersonalesControllers.js";
 import { obtenerDatosPersonales } from "../controllers/datosPersonalesControllers.js";
@@ -23,4 +22,3 @@ router.put("/datos-personales", verificarJWT, actualizarDatosPersonales);
 
 
 export default router;
-
