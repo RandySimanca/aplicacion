@@ -10,10 +10,6 @@ import verificarJWT from "../middlewares/verificarJWT.js";
 
 const router = express.Router();
 
-// Ruta de test (¡útil para verificar que se monte bien!)
-router.get("/test", (req, res) => {
-  res.send("🚀 Ruta de datos-personales activa");
-});
 
 // POST principal
 router.post("/datos-personales", verificarJWT, crearDatosPersonales);
