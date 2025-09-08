@@ -136,7 +136,7 @@ const route = useRoute();
 const usuarioStore = useUsuarioStore();
 
 // Sistema de contador de descargas
-const limiteDescargas = ref(1);
+const limiteDescargas = ref(5);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
@@ -153,6 +153,10 @@ onMounted(() => {
   const datos = JSON.parse(localStorage.getItem('usuario'));
   if (datos?.nombre) nombre.value = datos.nombre;
   
+  // Migrar contadores antiguos si existen
+  migrarContadores();
+  
+  // Cargar contador de descargas
   cargarContadorDescargas();
 });
 
@@ -182,21 +186,21 @@ function cargarContadorDescargas() {
     try {
       const info = JSON.parse(datos);
       descargasUsadas.value = info.usadas || 0;
-      limiteDescargas.value = info.limite || 1;
+      limiteDescargas.value = info.limite || 5;
       
       // Verificar si los datos son válidos
       if (descargasUsadas.value < 0) descargasUsadas.value = 0;
-      if (limiteDescargas.value < 1) limiteDescargas.value = 1;
+      if (limiteDescargas.value < 1) limiteDescargas.value = 5;
     } catch (error) {
       console.error('Error al cargar contador:', error);
       // Valores por defecto en caso de error
       descargasUsadas.value = 0;
-      limiteDescargas.value = 1;
+      limiteDescargas.value = 5;
     }
   } else {
     // Primera vez del usuario - inicializar
     descargasUsadas.value = 0;
-    limiteDescargas.value = 1;
+    limiteDescargas.value = 5;
     guardarContadorDescargas();
   }
 }
