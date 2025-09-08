@@ -12,8 +12,8 @@
       :disabled="generando"
       :class="{ 'limite-alcanzado': limiteAlcanzado }"
       :aria-busy="generando ? 'true' : 'false'"
-      @click="generarPDF"
-      :title="limiteAlcanzado ? 'Click para ver opciones de contacto' : 'Generar PDF'"
+      @click="manejarClickBoton"
+      :title="limiteAlcanzado ? 'Click para ver opciones de desbloqueo' : 'Generar PDF'"
     >
       <span v-if="!generando && !limiteAlcanzado" class="btn-icon" aria-hidden="true">📄</span>
       <span v-else-if="limiteAlcanzado" class="btn-icon" aria-hidden="true">🔒</span>
@@ -33,54 +33,83 @@
     <div v-if="mostrarModalLimite" class="modal-overlay" @click="cerrarModal">
       <div class="modal-content" @click.stop>
         <div class="modal-header">
-          <h3>🔒 Descargas en modo gratis alcanzado</h3>
+          <h3>🔒 Límite de descargas alcanzado</h3>
           <button @click="cerrarModal" class="close-btn">&times;</button>
         </div>
         <div class="modal-body">
-          <p>Has alcanzado el límite máximo de <strong>{{ limiteDescargas }} descargas</strong> de tu hoja de vida en PDF en el modo gratuito.</p>
-          <p>Para continuar descargando, contacta al administrador del sistema:</p>
-          
-          <div class="contact-info">
-            <div class="contact-item">
-              <span class="contact-icon">🙋</span>
-              <span>Randy Simanca</span>
-            </div>
-            <div class="contact-item">
-              <span class="contact-icon">📞</span>
-              <span>+57 314 519 3285</span>
-            </div>
-            <div class="contact-item">
-              <span class="contact-icon">📧</span>
-              <span>randysimancamercado@gmail.com</span>
+          <div class="limit-info">
+            <div class="limit-badge">
+              <span class="limit-number">{{ limiteDescargas }}</span>
+              <span class="limit-text">descargas utilizadas</span>
             </div>
           </div>
           
-          <div class="codigo-desbloqueo">
-            <label for="codigo-input">Código de desbloqueo:</label>
-            <input 
-              type="text" 
-              id="codigo-input" 
-              v-model="codigoDesbloqueo" 
-              placeholder="Ingrese el código proporcionado" 
-              class="codigo-input"
-            />
-            <button @click="verificarCodigo" class="btn-verificar">Verificar</button>
+          <p class="main-message">Has alcanzado el límite máximo de descargas de tu hoja de vida en PDF en el modo gratuito.</p>
+          
+          <div class="unlock-section">
+            <h4>🔓 Desbloquear descargas</h4>
+            <p>Ingresa el código de desbloqueo proporcionado por el administrador:</p>
+            
+            <div class="codigo-desbloqueo">
+              <div class="input-wrapper">
+                <input 
+                  type="text" 
+                  id="codigo-input" 
+                  v-model="codigoDesbloqueo" 
+                  placeholder="Código de desbloqueo" 
+                  class="codigo-input"
+                  @keyup.enter="verificarCodigo"
+                />
+                <button @click="verificarCodigo" class="btn-verificar" :disabled="!codigoDesbloqueo.trim()">
+                  <span v-if="verificandoCodigo" class="spinner-small"></span>
+                  <span v-else>Verificar</span>
+                </button>
+              </div>
+              <div v-if="mensajeVerificacion" class="mensaje-verificacion" :class="{ 'error': esError, 'success': !esError }">
+                {{ mensajeVerificacion }}
+              </div>
+            </div>
           </div>
           
-          <p class="note">El administrador podrá restablecer tu contador de descargas o proporcionarte un código de desbloqueo.</p>
+          <div class="contact-section">
+            <h4>📞 Contactar administrador</h4>
+            <p>Para obtener un código de desbloqueo, contacta al administrador:</p>
+            
+            <div class="contact-info">
+              <div class="contact-item">
+                <span class="contact-icon">👤</span>
+                <span>Randy Simanca</span>
+              </div>
+              <div class="contact-item">
+                <span class="contact-icon">📱</span>
+                <span>+57 314 519 3285</span>
+              </div>
+              <div class="contact-item">
+                <span class="contact-icon">✉️</span>
+                <span>randysimancamercado@gmail.com</span>
+              </div>
+            </div>
+          </div>
+          
+          <div class="note-section">
+            <p class="note">💡 El administrador podrá proporcionarte un código de desbloqueo para continuar con las descargas.</p>
+          </div>
         </div>
         <div class="modal-footer">
           <button @click="cerrarModal" class="btn-secondary">Cerrar</button>
           <button @click="copiarContacto" class="btn-primary">
-            {{ textoCopiado ? '✓ Copiado' : 'Copiar numero de contacto' }}
+            {{ textoCopiado ? '✅ Copiado' : '📋 Copiar contacto' }}
           </button>
         </div>
       </div>
     </div>
 
-    <!-- Contador visual (opcional - para mostrar al usuario) -->
+    <!-- Contador visual -->
     <div class="contador-info" v-if="!limiteAlcanzado">
-      <span class="contador-text">Descargas disponibles: {{ descargasRestantes }}</span>
+      <div class="contador-header">
+        <span class="contador-text">Descargas disponibles</span>
+        <span class="contador-numeros">{{ descargasRestantes }}/{{ limiteDescargas }}</span>
+      </div>
       <div class="contador-barra">
         <div 
           class="contador-progreso" 
@@ -107,12 +136,14 @@ const route = useRoute();
 const usuarioStore = useUsuarioStore();
 
 // Sistema de contador de descargas
-const limiteDescargas = ref(1); // Límite configurable
+const limiteDescargas = ref(5);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
 const codigoDesbloqueo = ref('');
 const mensajeVerificacion = ref('');
+const esError = ref(false);
+const verificandoCodigo = ref(false);
 
 // Computed properties
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
@@ -122,39 +153,86 @@ onMounted(() => {
   const datos = JSON.parse(localStorage.getItem('usuario'));
   if (datos?.nombre) nombre.value = datos.nombre;
   
-  // Cargar contador de descargas del localStorage
   cargarContadorDescargas();
 });
 
-function cargarContadorDescargas() {
+function obtenerUsuarioId() {
+  // Obtener ID único del usuario actual
   const usuario = JSON.parse(localStorage.getItem('usuario'));
-  const userId = usuario?.id || 'anonimo';
-  const key = `descargas_pdf_${userId}`;
+  
+  // Si el usuario tiene ID, usarlo; si no, crear uno basado en email o nombre
+  if (usuario?.id) {
+    return usuario.id;
+  } else if (usuario?.email) {
+    return `email_${usuario.email}`;
+  } else if (usuario?.nombre) {
+    return `nombre_${usuario.nombre}`;
+  } else {
+    // Si no hay usuario logueado, usar un ID genérico
+    return 'usuario_anonimo';
+  }
+}
+
+function cargarContadorDescargas() {
+  const userId = obtenerUsuarioId();
+  const key = `pdf_downloads_${userId}`;
   
   const datos = localStorage.getItem(key);
   if (datos) {
-    const info = JSON.parse(datos);
-    descargasUsadas.value = info.usadas || 0;
-    limiteDescargas.value = info.limite || 5;
+    try {
+      const info = JSON.parse(datos);
+      descargasUsadas.value = info.usadas || 0;
+      limiteDescargas.value = info.limite || 5;
+      
+      // Verificar si los datos son válidos
+      if (descargasUsadas.value < 0) descargasUsadas.value = 0;
+      if (limiteDescargas.value < 1) limiteDescargas.value = 5;
+    } catch (error) {
+      console.error('Error al cargar contador:', error);
+      // Valores por defecto en caso de error
+      descargasUsadas.value = 0;
+      limiteDescargas.value = 5;
+    }
+  } else {
+    // Primera vez del usuario - inicializar
+    descargasUsadas.value = 0;
+    limiteDescargas.value = 5;
+    guardarContadorDescargas();
   }
 }
 
 function guardarContadorDescargas() {
-  const usuario = JSON.parse(localStorage.getItem('usuario'));
-  const userId = usuario?.id || 'anonimo';
-  const key = `descargas_pdf_${userId}`;
+  const userId = obtenerUsuarioId();
+  const key = `pdf_downloads_${userId}`;
   
   const info = {
+    userId: userId,
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
-    ultimaDescarga: new Date().toISOString()
+    ultimaDescarga: new Date().toISOString(),
+    fechaCreacion: new Date().toISOString()
   };
   
-  localStorage.setItem(key, JSON.stringify(info));
+  try {
+    localStorage.setItem(key, JSON.stringify(info));
+  } catch (error) {
+    console.error('Error al guardar contador:', error);
+  }
+}
+
+// Nueva función para manejar el click del botón
+function manejarClickBoton() {
+  if (limiteAlcanzado.value) {
+    // Si está bloqueado, mostrar modal
+    mostrarModalLimite.value = true;
+  } else {
+    // Si no está bloqueado, generar PDF
+    generarPDF();
+  }
 }
 
 async function generarPDF() {
-  // Verificar límite antes de proceder - siempre mostrar modal si está bloqueado
+  // Verificación de seguridad adicional
   if (limiteAlcanzado.value) {
     mostrarModalLimite.value = true;
     return;
@@ -183,19 +261,21 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
       
-    // Incrementar contador y guardar
+    // Incrementar contador y guardar DESPUÉS de la descarga exitosa
     descargasUsadas.value++;
     guardarContadorDescargas();
     
-    // Mostrar modal si se alcanzó el límite
+    // Si se alcanzó el límite, mostrar modal después de un momento
     if (limiteAlcanzado.value) {
       setTimeout(() => {
         mostrarModalLimite.value = true;
-      }, 1000);
+      }, 1500);
     }
       
   } catch (error) {
     console.error('Error al generar PDF:', error);
+    // En caso de error, no incrementar el contador
+    alert('Error al generar el PDF. Por favor, inténtalo de nuevo.');
   } finally {
     generando.value = false;
   }
@@ -204,65 +284,126 @@ async function generarPDF() {
 function cerrarModal() {
   mostrarModalLimite.value = false;
   textoCopiado.value = false;
+  codigoDesbloqueo.value = '';
+  mensajeVerificacion.value = '';
+  esError.value = false;
 }
 
 async function copiarContacto() {
   try {
-    await navigator.clipboard.writeText('3145193285');
+    const contactoCompleto = 'Randy Simanca - +57 314 519 3285 - randysimancamercado@gmail.com';
+    await navigator.clipboard.writeText(contactoCompleto);
     textoCopiado.value = true;
     setTimeout(() => {
       textoCopiado.value = false;
-    }, 2000);
+    }, 3000);
   } catch (error) {
     console.error('Error al copiar:', error);
+    // Fallback para navegadores que no soportan clipboard API
+    try {
+      const textArea = document.createElement('textarea');
+      textArea.value = '+57 314 519 3285';
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      textoCopiado.value = true;
+      setTimeout(() => {
+        textoCopiado.value = false;
+      }, 3000);
+    } catch (fallbackError) {
+      alert('No se pudo copiar automáticamente. Número: +57 314 519 3285');
+    }
   }
 }
 
 // Función para verificar el código de desbloqueo
-function verificarCodigo() {
-  // Lista de códigos válidos (en un sistema real, esto estaría en el backend)
-  const codigosValidos = ['RANDYADMIN1208','HOJA2023', 'DESBLOQUEAR', 'PDF2023'];
-  
-  if (codigoDesbloqueo.value.trim() === '') {
-    alert('Por favor ingrese un código de desbloqueo');
+async function verificarCodigo() {
+  if (!codigoDesbloqueo.value.trim()) {
+    mostrarMensajeVerificacion('Por favor ingrese un código de desbloqueo', true);
     return;
   }
   
-  if (codigosValidos.includes(codigoDesbloqueo.value.trim().toUpperCase())) {
+  verificandoCodigo.value = true;
+  mensajeVerificacion.value = '';
+  
+  // Simular delay de verificación
+  await new Promise(r => setTimeout(r, 800));
+  
+  // Lista de códigos válidos
+  const codigosValidos = [
+    'RANDYADMIN1208',
+    'HOJA2023', 
+    'DESBLOQUEAR', 
+    'PDF2023',
+    'UNLOCK2024',
+    'RESET_DOWNLOADS'
+  ];
+  
+  const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
+  
+  if (codigosValidos.includes(codigoIngresado)) {
     // Código válido - resetear contador
     descargasUsadas.value = 0;
     guardarContadorDescargas();
-    alert('¡Código válido! Se han restablecido tus descargas disponibles.');
-    cerrarModal();
+    mostrarMensajeVerificacion('¡Código válido! Se han restablecido tus descargas disponibles.', false);
+    
+    setTimeout(() => {
+      cerrarModal();
+    }, 2000);
   } else {
     // Código inválido
-    alert('Código inválido. Por favor intente nuevamente o contacte al administrador.');
+    mostrarMensajeVerificacion('Código inválido. Contacta al administrador para obtener un código válido.', true);
   }
   
-  // Limpiar el campo después de la verificación
+  verificandoCodigo.value = false;
   codigoDesbloqueo.value = '';
 }
 
-// Función para que el admin pueda resetear el contador (solo para desarrollo/testing)
+function mostrarMensajeVerificacion(mensaje, error) {
+  mensajeVerificacion.value = mensaje;
+  esError.value = error;
+  
+  // Limpiar mensaje después de un tiempo
+  setTimeout(() => {
+    if (!error) return; // No limpiar mensajes de éxito automáticamente
+    mensajeVerificacion.value = '';
+  }, 5000);
+}
+
+// Función para desarrollo/testing
 function resetearContador() {
   descargasUsadas.value = 0;
   guardarContadorDescargas();
+  console.log('Contador reseteado para el usuario:', obtenerUsuarioId());
 }
 
-// Exponer función para uso en consola (desarrollo)
+// Función para ver todos los contadores (desarrollo)
+function verContadores() {
+  const contadores = {};
+  for (let i = 0; i < localStorage.length; i++) {
+    const key = localStorage.key(i);
+    if (key && key.startsWith('pdf_downloads_')) {
+      const data = JSON.parse(localStorage.getItem(key));
+      contadores[key] = data;
+    }
+  }
+  console.log('Contadores de descarga:', contadores);
+}
+
+// Exponer funciones para desarrollo
 if (import.meta.env.DEV) {
   window.resetearContadorPDF = resetearContador;
+  window.verContadoresPDF = verContadores;
 }
 </script>
 
 <style>
 .pdf-root { background: #fff; padding: 0.3in; }
 
-/* Fuerza salto de página entre cartas sin crear página en blanco al inicio/fin */
 .carta { page-break-after: always; }
 .carta:last-child { page-break-after: auto; }
 
-/* Botón rectangular fijo "Generar PDF" */
 .pdf-button {
   position: fixed;
   right: 24px;
@@ -312,31 +453,48 @@ if (import.meta.env.DEV) {
 .btn-icon { font-size: 18px; line-height: 1; }
 .btn-text { font-size: 14px; }
 
-/* Contador visual */
+/* Contador visual mejorado */
 .contador-info {
   position: fixed;
   right: 24px;
   bottom: 90px;
   background: rgba(255, 255, 255, 0.95);
-  padding: 8px 12px;
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  backdrop-filter: blur(10px);
+  padding: 10px 14px;
+  border-radius: 12px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
   font-size: 12px;
   color: #666;
   z-index: 999;
+  border: 1px solid rgba(255,255,255,0.2);
+}
+
+.contador-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6px;
 }
 
 .contador-text {
-  display: block;
-  margin-bottom: 4px;
   font-weight: 500;
+  color: #374151;
+}
+
+.contador-numeros {
+  font-weight: 600;
+  color: #1f2937;
+  background: #f3f4f6;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
 }
 
 .contador-barra {
-  width: 120px;
-  height: 4px;
+  width: 140px;
+  height: 6px;
   background: #e5e7eb;
-  border-radius: 2px;
+  border-radius: 3px;
   overflow: hidden;
 }
 
@@ -344,16 +502,18 @@ if (import.meta.env.DEV) {
   height: 100%;
   background: linear-gradient(90deg, #10b981 0%, #059669 100%);
   transition: width 0.3s ease;
+  border-radius: 3px;
 }
 
-/* Modal */
+/* Modal moderno mejorado */
 .modal-overlay {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -363,28 +523,30 @@ if (import.meta.env.DEV) {
 
 .modal-content {
   background: white;
-  border-radius: 16px;
-  max-width: 500px;
-  width: 90%;
-  max-height: 80vh;
+  border-radius: 20px;
+  max-width: 520px;
+  width: 95%;
+  max-height: 85vh;
   overflow: hidden;
-  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
-  animation: slideIn 0.3s ease;
+  box-shadow: 0 25px 50px rgba(0,0,0,0.4);
+  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  border: 1px solid rgba(255,255,255,0.1);
 }
 
 .modal-header {
-  padding: 1.5rem;
-  border-bottom: 1px solid #e5e7eb;
+  padding: 1.5rem 2rem;
+  border-bottom: 1px solid #f1f5f9;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  background: #f9fafb;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
 }
 
 .modal-header h3 {
   margin: 0;
-  color: #ef4444;
-  font-size: 1.25rem;
+  color: #dc2626;
+  font-size: 1.3rem;
+  font-weight: 700;
 }
 
 .close-btn {
@@ -392,44 +554,187 @@ if (import.meta.env.DEV) {
   border: none;
   font-size: 1.5rem;
   cursor: pointer;
-  color: #6b7280;
-  padding: 0;
-  width: 30px;
-  height: 30px;
+  color: #64748b;
+  padding: 4px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  transition: background 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .close-btn:hover {
-  background: #f3f4f6;
+  background: #f1f5f9;
+  color: #374151;
+  transform: scale(1.1);
 }
 
 .modal-body {
-  padding: 1.5rem;
+  padding: 2rem;
   line-height: 1.6;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 
-.modal-body p {
-  margin-bottom: 1rem;
+.limit-info {
+  text-align: center;
+  margin-bottom: 1.5rem;
+}
+
+.limit-badge {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
+  padding: 1rem 1.5rem;
+  border-radius: 12px;
+  border: 2px solid #fecaca;
+}
+
+.limit-number {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #dc2626;
+  line-height: 1;
+}
+
+.limit-text {
+  font-size: 0.875rem;
+  color: #991b1b;
+  font-weight: 500;
+  margin-top: 0.25rem;
+}
+
+.main-message {
+  text-align: center;
+  font-size: 1.1rem;
   color: #374151;
+  margin-bottom: 2rem;
+  font-weight: 500;
+}
+
+.unlock-section, .contact-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background: #f8fafc;
+  border-radius: 12px;
+  border: 1px solid #e2e8f0;
+}
+
+.unlock-section h4, .contact-section h4 {
+  margin: 0 0 0.75rem 0;
+  color: #1e293b;
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.unlock-section p, .contact-section p {
+  margin-bottom: 1rem;
+  color: #475569;
+}
+
+.codigo-desbloqueo {
+  margin-top: 1rem;
+}
+
+.input-wrapper {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.codigo-input {
+  flex: 1;
+  padding: 0.875rem 1rem;
+  border-radius: 8px;
+  border: 2px solid #e2e8f0;
+  font-size: 1rem;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.codigo-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.btn-verificar {
+  padding: 0.875rem 1.5rem;
+  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  min-width: 100px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-verificar:hover:not(:disabled) {
+  background: linear-gradient(135deg, #059669 0%, #047857 100%);
+  transform: translateY(-1px);
+}
+
+.btn-verificar:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.spinner-small {
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.mensaje-verificacion {
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  animation: slideDown 0.3s ease;
+}
+
+.mensaje-verificacion.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.mensaje-verificacion.success {
+  background: #f0fdf4;
+  color: #166534;
+  border: 1px solid #bbf7d0;
 }
 
 .contact-info {
-  background: #f3f4f6;
+  background: white;
   padding: 1rem;
   border-radius: 8px;
-  margin: 1rem 0;
+  border: 1px solid #e2e8f0;
 }
 
 .contact-item {
   display: flex;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
-  font-weight: 500;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  transition: background 0.2s ease;
+}
+
+.contact-item:hover {
+  background: #f8fafc;
 }
 
 .contact-item:last-child {
@@ -437,100 +742,68 @@ if (import.meta.env.DEV) {
 }
 
 .contact-icon {
-  font-size: 1rem;
+  font-size: 1.1rem;
+  width: 24px;
+  text-align: center;
+}
+
+.note-section {
+  text-align: center;
+  padding: 1rem;
+  background: linear-gradient(135deg, #fef7ff 0%, #faf5ff 100%);
+  border-radius: 8px;
+  border: 1px solid #e9d5ff;
 }
 
 .note {
   font-size: 0.875rem;
-  color: #6b7280;
-  font-style: italic;
-}
-
-.codigo-desbloqueo {
-  margin: 1.5rem 0;
-  padding: 1rem;
-  background: #f9fafb;
-  border-radius: 8px;
-  border: 1px solid #e5e7eb;
-}
-
-.codigo-desbloqueo label {
-  display: block;
-  margin-bottom: 0.5rem;
+  color: #7c3aed;
   font-weight: 500;
-  color: #374151;
-}
-
-.codigo-input {
-  width: 100%;
-  padding: 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #d1d5db;
-  margin-bottom: 0.75rem;
-  font-size: 1rem;
-  transition: border-color 0.2s ease;
-}
-
-.codigo-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
-}
-
-.btn-verificar {
-  width: 100%;
-  padding: 0.75rem;
-  background: #10b981;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: background 0.2s ease;
-}
-
-.btn-verificar:hover {
-  background: #059669;
+  margin: 0;
 }
 
 .modal-footer {
-  padding: 1rem 1.5rem;
-  border-top: 1px solid #e5e7eb;
+  padding: 1.5rem 2rem;
+  border-top: 1px solid #f1f5f9;
   display: flex;
   gap: 0.75rem;
   justify-content: flex-end;
-  background: #f9fafb;
+  background: #f8fafc;
 }
 
 .btn-primary, .btn-secondary {
-  padding: 0.5rem 1rem;
-  border-radius: 6px;
-  font-weight: 500;
+  padding: 0.75rem 1.5rem;
+  border-radius: 8px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.2s ease;
   border: none;
   font-size: 0.875rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 .btn-primary {
-  background: #3b82f6;
+  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
   color: white;
 }
 
 .btn-primary:hover {
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+  transform: translateY(-1px);
 }
 
 .btn-secondary {
-  background: #6b7280;
+  background: #64748b;
   color: white;
 }
 
 .btn-secondary:hover {
-  background: #4b5563;
+  background: #475569;
+  transform: translateY(-1px);
 }
 
-/* Spinner */
 .spinner {
   width: 20px;
   height: 20px;
@@ -551,21 +824,50 @@ if (import.meta.env.DEV) {
 }
 
 @keyframes slideIn {
-  from { transform: translateY(-20px) scale(0.95); opacity: 0; }
-  to { transform: translateY(0) scale(1); opacity: 1; }
+  from { 
+    transform: translateY(-30px) scale(0.9); 
+    opacity: 0; 
+  }
+  to { 
+    transform: translateY(0) scale(1); 
+    opacity: 1; 
+  }
 }
 
-/* Ocultar elementos marcados solo en generación PDF */
+@keyframes slideDown {
+  from {
+    transform: translateY(-10px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
 .generando-pdf .no-imprimir { display: none !important; }
 
-/* Responsive */
 @media (max-width: 768px) {
   .modal-content {
     width: 95%;
     margin: 1rem;
+    border-radius: 16px;
+  }
+  
+  .modal-header {
+    padding: 1.25rem 1.5rem;
+  }
+  
+  .modal-body {
+    padding: 1.5rem;
   }
   
   .modal-footer {
+    flex-direction: column;
+    padding: 1.25rem 1.5rem;
+  }
+  
+  .input-wrapper {
     flex-direction: column;
   }
   
@@ -578,6 +880,22 @@ if (import.meta.env.DEV) {
     right: 16px;
     bottom: 16px;
     min-width: 160px;
+  }
+  
+  .unlock-section, .contact-section {
+    padding: 1.25rem;
+  }
+  
+  .limit-badge {
+    padding: 0.75rem 1.25rem;
+  }
+  
+  .limit-number {
+    font-size: 1.75rem;
+  }
+  
+  .main-message {
+    font-size: 1rem;
   }
 }
 </style>
