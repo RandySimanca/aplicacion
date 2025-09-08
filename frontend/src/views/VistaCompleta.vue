@@ -182,21 +182,21 @@ function cargarContadorDescargas() {
     try {
       const info = JSON.parse(datos);
       descargasUsadas.value = info.usadas || 0;
-      limiteDescargas.value = info.limite || 5;
+      limiteDescargas.value = info.limite || 1;
       
       // Verificar si los datos son válidos
       if (descargasUsadas.value < 0) descargasUsadas.value = 0;
-      if (limiteDescargas.value < 1) limiteDescargas.value = 5;
+      if (limiteDescargas.value < 1) limiteDescargas.value = 1;
     } catch (error) {
       console.error('Error al cargar contador:', error);
       // Valores por defecto en caso de error
       descargasUsadas.value = 0;
-      limiteDescargas.value = 5;
+      limiteDescargas.value = 1;
     }
   } else {
     // Primera vez del usuario - inicializar
     descargasUsadas.value = 0;
-    limiteDescargas.value = 5;
+    limiteDescargas.value = 1;
     guardarContadorDescargas();
   }
 }
