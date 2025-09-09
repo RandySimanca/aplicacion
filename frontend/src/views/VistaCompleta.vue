@@ -194,7 +194,7 @@ async function inicializarSistema() {
   // Generar información del navegador
   generarInfoNavegador();
   
-  // Generar ID único para el usuario actual
+  // Generar ID único para el usuario actual - MODIFICADO PARA USAR ID PERSISTENTE
   await generarUsuarioId();
   
   // Cargar contador de descargas específico del usuario
@@ -248,12 +248,20 @@ function generarInfoNavegador() {
 
 async function generarUsuarioId() {
   try {
-    // Crear un ID único basado en el nombre del usuario y datos adicionales
+    // MODIFICADO: Usar el ID del store de usuario si está disponible
+    // Esto asegura que el ID persista entre sesiones
+    if (usuarioStore.user && usuarioStore.user.id) {
+      usuarioId.value = `user_${usuarioStore.user.id}`;
+      return;
+    }
+    
+    // Fallback: Crear un ID único basado en información persistente
     const datosUsuario = {
       nombre: nombre.value.toLowerCase().trim(),
-      timestamp: Math.floor(Date.now() / (1000 * 60 * 60 * 24)), // Día actual
-      navegador: navigator.userAgent.substring(0, 50), // Primeros 50 caracteres
-      idioma: navigator.language,
+      // Usamos información que persiste entre sesiones
+      userAgent: navigator.userAgent.substring(0, 50),
+      language: navigator.language,
+      // No usar timestamp para que sea consistente entre sesiones
     };
     
     const cadenaUsuario = JSON.stringify(datosUsuario);
@@ -261,8 +269,8 @@ async function generarUsuarioId() {
     
   } catch (error) {
     console.error('Error generando ID de usuario:', error);
-    // Fallback simple
-    usuarioId.value = await generarHashUsuario(nombre.value + Date.now().toString());
+    // Fallback simple - sin timestamp para persistencia
+    usuarioId.value = await generarHashUsuario(nombre.value);
   }
 }
 
