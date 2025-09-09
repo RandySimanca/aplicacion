@@ -107,7 +107,7 @@
           </div>
           
           <div class="note-section">
-            <p class="note">💡 Menciona tu ID de dispositivo al contactar al administrador para recibir un código específico.</p>
+            <p class="note">💡 Menciona tu ID de usuario al contactar al administrador para recibir un código específico.</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -1152,5 +1152,4 @@ code.device-value {
     font-size: 0.8rem;
     padding: 0.5rem;
   }
-}
-</style>
+}</style>
