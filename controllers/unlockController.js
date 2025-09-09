@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import UnlockCode from '../models/UnlockCode.js';
 import Usuario from '../models/Usuario.js';
+import mongoose from 'mongoose';
 
 dotenv.config();
 
@@ -22,6 +23,9 @@ export const verifyUnlock = async (req, res) => {
     }
 
     const codeUpper = code.trim().toUpperCase();
+    const userUidFromToken = req.user?.uid || null;
+    const bodyUidValid = usuarioId && mongoose.Types.ObjectId.isValid(usuarioId) ? usuarioId : null;
+    const targetUid = userUidFromToken || bodyUidValid;
 
     // 1) DB-managed codes
     const now = new Date();
@@ -32,8 +36,12 @@ export const verifyUnlock = async (req, res) => {
       const underLimit = !dbCode.usageLimit || dbCode.usedCount < dbCode.usageLimit;
       if (withinFrom && withinUntil && underLimit) {
         await UnlockCode.updateOne({ _id: dbCode._id }, { $inc: { usedCount: 1 } });
-        if (usuarioId) {
-          await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+        if (targetUid) {
+          try {
+            await Usuario.findByIdAndUpdate(targetUid, { bloqueado: false, descargasRealizadas: 0 });
+          } catch (e) {
+            console.warn('No se pudo actualizar usuario al verificar código (DB):', e?.message);
+          }
         }
         return res.json({ ok: true, scope: dbCode.isMaster ? 'master' : 'user', resetDownloads: true });
       }
@@ -42,8 +50,12 @@ export const verifyUnlock = async (req, res) => {
     // 2) Master codes from env (fallback)
     const masterCodes = parseEnvList(process.env.UNLOCK_MASTER_CODES);
     if (masterCodes.includes(codeUpper)) {
-      if (usuarioId) {
-        await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+      if (targetUid) {
+        try {
+          await Usuario.findByIdAndUpdate(targetUid, { bloqueado: false, descargasRealizadas: 0 });
+        } catch (e) {
+          console.warn('No se pudo actualizar usuario al verificar código (ENV):', e?.message);
+        }
       }
       return res.json({ ok: true, scope: 'master', resetDownloads: true });
     }
@@ -65,8 +77,12 @@ export const verifyUnlock = async (req, res) => {
     ]);
 
     if (validUserCodes.has(codeUpper)) {
-      if (usuarioId) {
-        await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+      if (targetUid) {
+        try {
+          await Usuario.findByIdAndUpdate(targetUid, { bloqueado: false, descargasRealizadas: 0 });
+        } catch (e) {
+          console.warn('No se pudo actualizar usuario al verificar código (pattern):', e?.message);
+        }
       }
       return res.json({ ok: true, scope: 'user', resetDownloads: true });
     }
