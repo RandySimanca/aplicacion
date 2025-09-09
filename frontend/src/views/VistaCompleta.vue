@@ -150,6 +150,7 @@ import Hoja2 from './Hoja2.vue';
 import Hoja3 from './Hoja3.vue';
 import { useRoute } from 'vue-router';
 import { useUsuarioStore } from '../stores/usuarios';
+import { verifyUnlockCode } from '../api/unlockAPI';
 
 const documento = ref(null);
 const generando = ref(false);
@@ -628,42 +629,30 @@ async function verificarCodigo() {
   verificandoCodigo.value = true;
   mensajeVerificacion.value = '';
   
-  await new Promise(r => setTimeout(r, 800));
-  
-  const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
-  
-  // Códigos específicos por usuario (más seguros y específicos)
-  const codigoEspecificoUsuario = `UNLOCK_${usuarioId.value}_2024`;
-  const codigoEspecificoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_2024`;
-  
-  const codigosValidos = [
-    'RANDYADMIN1208',
-    'MASTER_RESET_2024',
-    'EMERGENCY_UNLOCK',
-    codigoEspecificoUsuario,
-    codigoEspecificoNombre,
-    `USER_${usuarioId.value}` // Código alternativo más simple
-  ];
-  
-  if (codigosValidos.includes(codigoIngresado)) {
-    // Código válido - resetear contador para este usuario específico
-    descargasUsadas.value = 0;
-    await guardarContadorUsuario();
-    
-    // Log del desbloqueo para auditoría
-    console.log(`Desbloqueo exitoso para usuario: ${nombre.value} (${usuarioId.value}) con código: ${codigoIngresado}`);
-    
-    mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
-    
-    setTimeout(() => {
-      cerrarModal();
-    }, 2000);
-  } else {
-    mostrarMensajeVerificacion(`Código inválido para el usuario ${nombre.value}. Tu ID es: ${usuarioId.value}`, true);
+  try {
+    const code = codigoDesbloqueo.value.trim();
+    const respuesta = await verifyUnlockCode({ code, usuarioId: usuarioId.value, nombre: nombre.value });
+    if (respuesta?.ok && respuesta.resetDownloads) {
+      descargasUsadas.value = 0;
+      await guardarContadorUsuario();
+      mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
+      setTimeout(() => {
+        cerrarModal();
+      }, 2000);
+    } else {
+      mostrarMensajeVerificacion('Código inválido', true);
+    }
+  } catch (error) {
+    const serverMsg = error?.response?.data?.message || 'Error verificando el código';
+    if (error?.response?.status === 401) {
+      mostrarMensajeVerificacion(serverMsg || 'No autorizado. Inicia sesión para validar el código.', true);
+    } else {
+      mostrarMensajeVerificacion(serverMsg, true);
+    }
+  } finally {
+    verificandoCodigo.value = false;
+    codigoDesbloqueo.value = '';
   }
-  
-  verificandoCodigo.value = false;
-  codigoDesbloqueo.value = '';
 }
 
 function mostrarMensajeVerificacion(mensaje, error) {
