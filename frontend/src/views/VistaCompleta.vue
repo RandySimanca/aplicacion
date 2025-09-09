@@ -158,7 +158,7 @@ const route = useRoute();
 const usuarioStore = useUsuarioStore();
 
 // Sistema de contador de descargas por usuario
-const limiteDescargas = ref(3);
+const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
@@ -214,7 +214,7 @@ async function actualizarSistemaUsuario() {
       if (datosAnteriores) {
         const info = JSON.parse(datosAnteriores);
         descargasUsadas.value = info.usadas || 0;
-        limiteDescargas.value = info.limite || 3;
+        limiteDescargas.value = info.limite || 1;
         console.log(`Datos migrados de ID anterior: ${nombreAnterior} -> ${usuarioId.value}`);
         
         // Limpiar datos antiguos
@@ -305,7 +305,7 @@ async function cargarContadorUsuario() {
   if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
     // Si no hay usuario válido, usar valores por defecto
     descargasUsadas.value = 0;
-    limiteDescargas.value = 3;
+    limiteDescargas.value = 1;
     return;
   }
   
@@ -319,7 +319,7 @@ async function cargarContadorUsuario() {
       const info = JSON.parse(datos);
       if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
         descargasUsadas.value = Math.max(0, info.usadas || 0);
-        limiteDescargas.value = Math.max(1, info.limite || 3);
+        limiteDescargas.value = Math.max(1, info.limite || 1);
         contadorCargado = true;
         console.log(`Contador cargado para usuario: ${nombre.value} (${usuarioId.value})`);
       }
@@ -336,7 +336,7 @@ async function cargarContadorUsuario() {
         const info = JSON.parse(datosBackup);
         if (info.usuarioId === usuarioId.value) {
           descargasUsadas.value = Math.max(0, info.usadas || 0);
-          limiteDescargas.value = Math.max(1, info.limite || 3);
+          limiteDescargas.value = Math.max(1, info.limite || 1);
           contadorCargado = true;
           console.log(`Contador cargado desde backup para: ${nombre.value}`);
         }
@@ -349,7 +349,7 @@ async function cargarContadorUsuario() {
   // Si es la primera vez para este usuario, inicializar
   if (!contadorCargado) {
     descargasUsadas.value = 0;
-    limiteDescargas.value = 3;
+    limiteDescargas.value = 1;
     await guardarContadorUsuario();
     await registrarUsuario();
     console.log(`Nuevo usuario inicializado: ${nombre.value} (${usuarioId.value})`);
