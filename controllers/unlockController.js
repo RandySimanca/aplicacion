@@ -1,5 +1,7 @@
 // backend/controllers/unlockController.js
 import dotenv from 'dotenv';
+import UnlockCode from '../models/UnlockCode.js';
+import Usuario from '../models/Usuario.js';
 
 dotenv.config();
 
@@ -21,9 +23,28 @@ export const verifyUnlock = async (req, res) => {
 
     const codeUpper = code.trim().toUpperCase();
 
-    // Allow master codes from env
+    // 1) DB-managed codes
+    const now = new Date();
+    const dbCode = await UnlockCode.findOne({ code: codeUpper, active: true });
+    if (dbCode) {
+      const withinFrom = !dbCode.validFrom || now >= dbCode.validFrom;
+      const withinUntil = !dbCode.validUntil || now <= dbCode.validUntil;
+      const underLimit = !dbCode.usageLimit || dbCode.usedCount < dbCode.usageLimit;
+      if (withinFrom && withinUntil && underLimit) {
+        await UnlockCode.updateOne({ _id: dbCode._id }, { $inc: { usedCount: 1 } });
+        if (usuarioId) {
+          await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+        }
+        return res.json({ ok: true, scope: dbCode.isMaster ? 'master' : 'user', resetDownloads: true });
+      }
+    }
+
+    // 2) Master codes from env (fallback)
     const masterCodes = parseEnvList(process.env.UNLOCK_MASTER_CODES);
     if (masterCodes.includes(codeUpper)) {
+      if (usuarioId) {
+        await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+      }
       return res.json({ ok: true, scope: 'master', resetDownloads: true });
     }
 
@@ -44,6 +65,9 @@ export const verifyUnlock = async (req, res) => {
     ]);
 
     if (validUserCodes.has(codeUpper)) {
+      if (usuarioId) {
+        await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
+      }
       return res.json({ ok: true, scope: 'user', resetDownloads: true });
     }
 

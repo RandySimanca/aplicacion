@@ -7,6 +7,8 @@ const usuarioSchema = new mongoose.Schema({
   email: { type: String, required: true, unique: true },
   password: { type: String, required: true },
   roles: { type: [String], default: ["usuario"] },
+  bloqueado: { type: Boolean, default: false },
+  descargasRealizadas: { type: Number, default: 0 },
   fechaCreacion: { type: Date, default: Date.now },
   ultimoAcceso: Date,
 });

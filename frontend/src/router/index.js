@@ -15,12 +15,24 @@ import Hoja2 from "../views/Hoja2.vue";
 import Hoja2Extra from "../views/Hoja2Extra.vue";
 import Hoja3 from "../views/Hoja3.vue";
 import VistaCompleta from "../views/VistaCompleta.vue";
+import AdminDashboard from "../views/AdminDashboard.vue";
 
 
 // Middleware para proteger rutas
 const requireAuth = (to, from, next) => {
   const token = localStorage.getItem("token");
   token ? next() : next("/login");
+};
+
+const requireAdmin = (to, from, next) => {
+  const token = localStorage.getItem('token');
+  const usuario = localStorage.getItem('usuario');
+  if (!token || !usuario) return next('/login');
+  try {
+    const u = JSON.parse(usuario);
+    if (Array.isArray(u.roles) && u.roles.includes('admin')) return next();
+  } catch {}
+  return next('/panel/Hoja1');
 };
 
 
@@ -52,6 +64,15 @@ const router = createRouter({
         { path: "Hoja2Extra", component: Hoja2Extra },
         { path: "Hoja3", component: Hoja3 },
         {path: "vistaCompleta", component: VistaCompleta},
+      ]
+    },
+
+    {
+      path: "/admin",
+      component: LayoutPrivado,
+      beforeEnter: requireAdmin,
+      children: [
+        { path: "", component: AdminDashboard }
       ]
     },
 
