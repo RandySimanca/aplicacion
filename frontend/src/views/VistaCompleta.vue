@@ -150,6 +150,7 @@ import Hoja2 from './Hoja2.vue';
 import Hoja3 from './Hoja3.vue';
 import { useRoute } from 'vue-router';
 import { useUsuarioStore } from '../stores/usuarios';
+import api from '../api/axios';
 
 const documento = ref(null);
 const generando = ref(false);
@@ -628,42 +629,31 @@ async function verificarCodigo() {
   verificandoCodigo.value = true;
   mensajeVerificacion.value = '';
   
-  await new Promise(r => setTimeout(r, 800));
-  
-  const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
-  
-  // Códigos específicos por usuario (más seguros y específicos)
-  const codigoEspecificoUsuario = `UNLOCK_${usuarioId.value}_2024`;
-  const codigoEspecificoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_2024`;
-  
-  const codigosValidos = [
-    'RANDYADMIN1208',
-    'MASTER_RESET_2024',
-    'EMERGENCY_UNLOCK',
-    codigoEspecificoUsuario,
-    codigoEspecificoNombre,
-    `USER_${usuarioId.value}` // Código alternativo más simple
-  ];
-  
-  if (codigosValidos.includes(codigoIngresado)) {
-    // Código válido - resetear contador para este usuario específico
-    descargasUsadas.value = 0;
-    await guardarContadorUsuario();
-    
-    // Log del desbloqueo para auditoría
-    console.log(`Desbloqueo exitoso para usuario: ${nombre.value} (${usuarioId.value}) con código: ${codigoIngresado}`);
-    
-    mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
-    
-    setTimeout(() => {
-      cerrarModal();
-    }, 2000);
-  } else {
-    mostrarMensajeVerificacion(`Código inválido para el usuario ${nombre.value}. Tu ID es: ${usuarioId.value}`, true);
+  try {
+    const payload = {
+      codigo: codigoDesbloqueo.value.trim(),
+      usuarioId: usuarioId.value,
+      nombre: nombre.value
+    };
+    const { data } = await api.post('/pdf/verificar-codigo', payload);
+    if (data?.valido) {
+      descargasUsadas.value = 0;
+      await guardarContadorUsuario();
+      console.log(`Desbloqueo exitoso (server) para usuario: ${nombre.value} (${usuarioId.value})`);
+      mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
+      setTimeout(() => {
+        cerrarModal();
+      }, 2000);
+    } else {
+      mostrarMensajeVerificacion(data?.mensaje || `Código inválido para el usuario ${nombre.value}.`, true);
+    }
+  } catch (error) {
+    console.error('Error al verificar código:', error);
+    mostrarMensajeVerificacion('No se pudo verificar el código. Intenta de nuevo.', true);
+  } finally {
+    verificandoCodigo.value = false;
+    codigoDesbloqueo.value = '';
   }
-  
-  verificandoCodigo.value = false;
-  codigoDesbloqueo.value = '';
 }
 
 function mostrarMensajeVerificacion(mensaje, error) {
