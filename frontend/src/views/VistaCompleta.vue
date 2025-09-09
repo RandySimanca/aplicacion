@@ -631,7 +631,18 @@ async function verificarCodigo() {
   
   try {
     const code = codigoDesbloqueo.value.trim();
-    const respuesta = await verifyUnlockCode({ code, usuarioId: usuarioId.value, nombre: nombre.value });
+    // Usar el ID real del usuario autenticado (MongoDB) si está disponible
+    let backendUsuarioId = null;
+    try {
+      const authUser = JSON.parse(localStorage.getItem('usuario') || '{}');
+      backendUsuarioId = authUser?.uid || null;
+    } catch {}
+
+    const respuesta = await verifyUnlockCode({
+      code,
+      usuarioId: backendUsuarioId,
+      nombre: nombre.value,
+    });
     if (respuesta?.ok && respuesta.resetDownloads) {
       descargasUsadas.value = 0;
       await guardarContadorUsuario();

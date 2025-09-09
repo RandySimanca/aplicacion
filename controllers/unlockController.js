@@ -2,6 +2,7 @@
 import dotenv from 'dotenv';
 import UnlockCode from '../models/UnlockCode.js';
 import Usuario from '../models/Usuario.js';
+import mongoose from 'mongoose';
 
 dotenv.config();
 
@@ -32,7 +33,7 @@ export const verifyUnlock = async (req, res) => {
       const underLimit = !dbCode.usageLimit || dbCode.usedCount < dbCode.usageLimit;
       if (withinFrom && withinUntil && underLimit) {
         await UnlockCode.updateOne({ _id: dbCode._id }, { $inc: { usedCount: 1 } });
-        if (usuarioId) {
+        if (usuarioId && mongoose.Types.ObjectId.isValid(usuarioId)) {
           await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
         }
         return res.json({ ok: true, scope: dbCode.isMaster ? 'master' : 'user', resetDownloads: true });
@@ -42,7 +43,7 @@ export const verifyUnlock = async (req, res) => {
     // 2) Master codes from env (fallback)
     const masterCodes = parseEnvList(process.env.UNLOCK_MASTER_CODES);
     if (masterCodes.includes(codeUpper)) {
-      if (usuarioId) {
+      if (usuarioId && mongoose.Types.ObjectId.isValid(usuarioId)) {
         await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
       }
       return res.json({ ok: true, scope: 'master', resetDownloads: true });
@@ -65,7 +66,7 @@ export const verifyUnlock = async (req, res) => {
     ]);
 
     if (validUserCodes.has(codeUpper)) {
-      if (usuarioId) {
+      if (usuarioId && mongoose.Types.ObjectId.isValid(usuarioId)) {
         await Usuario.findByIdAndUpdate(usuarioId, { bloqueado: false, descargasRealizadas: 0 });
       }
       return res.json({ ok: true, scope: 'user', resetDownloads: true });
