@@ -653,13 +653,14 @@ if (typeof window !== 'undefined') {
   };
 }
 </script>
-
 <style>
-/* Estilos base mantenidos igual que el original */
 .pdf-root { background: #fff; padding: 0.3in; }
+
+/* Fuerza salto de página entre cartas sin crear página en blanco al inicio/fin */
 .carta { page-break-after: always; }
 .carta:last-child { page-break-after: auto; }
 
+/* Botón rectangular fijo "Generar PDF" */
 .pdf-button {
   position: fixed;
   right: 24px;
@@ -709,46 +710,272 @@ if (typeof window !== 'undefined') {
 .btn-icon { font-size: 18px; line-height: 1; }
 .btn-text { font-size: 14px; }
 
-/* Contador visual mejorado */
+/* Contador visual */
 .contador-info {
   position: fixed;
   right: 24px;
   bottom: 90px;
   background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 12px 16px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  padding: 8px 12px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   font-size: 12px;
   color: #666;
   z-index: 999;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-
-.contador-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
 }
 
 .contador-text {
+  display: block;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.contador-barra {
+  width: 120px;
+  height: 4px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.contador-progreso {
+  height: 100%;
+  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+  transition: width 0.3s ease;
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+  animation: fadeIn 0.3s ease;
+}
+
+.modal-content {
+  background: white;
+  border-radius: 16px;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0,0,0,0.3);
+  animation: slideIn 0.3s ease;
+}
+
+.modal-header {
+  padding: 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f9fafb;
+}
+
+.modal-header h3 {
+  margin: 0;
+  color: #ef4444;
+  font-size: 1.25rem;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background 0.2s ease;
+}
+
+.close-btn:hover {
+  background: #f3f4f6;
+}
+
+.modal-body {
+  padding: 1.5rem;
+  line-height: 1.6;
+}
+
+.modal-body p {
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.contact-info {
+  background: #f3f4f6;
+  padding: 1rem;
+  border-radius: 8px;
+  margin: 1rem 0;
+}
+
+.contact-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+}
+
+.contact-item:last-child {
+  margin-bottom: 0;
+}
+
+.contact-icon {
+  font-size: 1rem;
+}
+
+.note {
+  font-size: 0.875rem;
+  color: #6b7280;
+  font-style: italic;
+}
+
+.codigo-desbloqueo {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.codigo-desbloqueo label {
+  display: block;
+  margin-bottom: 0.5rem;
   font-weight: 500;
   color: #374151;
 }
 
-.contador-numeros {
-  font-weight: 600;
-  color: #1f2937;
-  background: #f3f4f6;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
+.codigo-input {
+  width: 100%;
+  padding: 0.75rem;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  margin-bottom: 0.75rem;
+  font-size: 1rem;
+  transition: border-color 0.2s ease;
 }
 
-.contador-barra {
-  width: 140px;
-  height: 6px;
-  background: #e5e7eb
+.codigo-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.2);
 }
-  </style>
+
+.btn-verificar {
+  width: 100%;
+  padding: 0.75rem;
+  background: #10b981;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.btn-verificar:hover {
+  background: #059669;
+}
+
+.modal-footer {
+  padding: 1rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: flex-end;
+  background: #f9fafb;
+}
+
+.btn-primary, .btn-secondary {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  border: none;
+  font-size: 0.875rem;
+}
+
+.btn-primary {
+  background: #3b82f6;
+  color: white;
+}
+
+.btn-primary:hover {
+  background: #2563eb;
+}
+
+.btn-secondary {
+  background: #6b7280;
+  color: white;
+}
+
+.btn-secondary:hover {
+  background: #4b5563;
+}
+
+/* Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(255,255,255,0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin { 
+  from { transform: rotate(0deg); } 
+  to { transform: rotate(360deg); } 
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideIn {
+  from { transform: translateY(-20px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+/* Ocultar elementos marcados solo en generación PDF */
+.generando-pdf .no-imprimir { display: none !important; }
+
+/* Responsive */
+@media (max-width: 768px) {
+  .modal-content {
+    width: 95%;
+    margin: 1rem;
+  }
+  
+  .modal-footer {
+    flex-direction: column;
+  }
+  
+  .contador-info {
+    right: 16px;
+    bottom: 80px;
+  }
+  
+  .pdf-button {
+    right: 16px;
+    bottom: 16px;
+    min-width: 160px;
+  }
+}
+</style>
