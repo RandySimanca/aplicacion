@@ -46,13 +46,17 @@
           
           <p class="main-message">Has alcanzado el límite máximo de descargas de tu hoja de vida en PDF.</p>
           
-          <!-- Información de identificación del dispositivo -->
+          <!-- Información de identificación del usuario -->
           <div class="device-info">
-            <h4>🔍 Información del dispositivo</h4>
+            <h4>👤 Información del usuario</h4>
             <div class="device-details">
               <div class="device-item">
-                <span class="device-label">ID del dispositivo:</span>
-                <code class="device-value">{{ dispositivoId }}</code>
+                <span class="device-label">Nombre de usuario:</span>
+                <span class="device-value">{{ nombre }}</span>
+              </div>
+              <div class="device-item">
+                <span class="device-label">ID único del usuario:</span>
+                <code class="device-value">{{ usuarioId }}</code>
               </div>
               <div class="device-item">
                 <span class="device-label">Navegador:</span>
@@ -88,7 +92,7 @@
           
           <div class="contact-section">
             <h4>📞 Contactar administrador</h4>
-            <p>Para obtener un código de desbloqueo, contacta al administrador proporcionando tu ID de dispositivo:</p>
+            <p>Para obtener un código de desbloqueo, contacta al administrador proporcionando tu ID de usuario:</p>
             
             <div class="contact-info">
               <div class="contact-item">
@@ -107,7 +111,7 @@
           </div>
           
           <div class="note-section">
-            <p class="note">💡 Menciona tu ID de usuario al contactar al administrador para recibir un código específico.</p>
+            <p class="note">💡 Menciona tu ID de usuario y nombre al contactar al administrador para recibir un código específico.</p>
           </div>
         </div>
         <div class="modal-footer">
@@ -131,12 +135,15 @@
           :style="{ width: `${(descargasUsadas / limiteDescargas) * 100}%` }"
         ></div>
       </div>
+      <div class="usuario-actual">
+        <span class="usuario-text">Usuario: {{ nombre }}</span>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick, computed, onMounted } from 'vue';
+import { ref, nextTick, computed, onMounted, watch } from 'vue';
 import html2pdf from 'html2pdf.js';
 import Hoja1 from './Hoja1.vue';
 import Hoja2 from './Hoja2.vue';
@@ -150,8 +157,8 @@ const nombre = ref('Invitado');
 const route = useRoute();
 const usuarioStore = useUsuarioStore();
 
-// Sistema robusto de contador de descargas
-const limiteDescargas = ref(3); // Reducido para mayor control
+// Sistema de contador de descargas por usuario
+const limiteDescargas = ref(3);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
 const textoCopiado = ref(false);
@@ -159,7 +166,7 @@ const codigoDesbloqueo = ref('');
 const mensajeVerificacion = ref('');
 const esError = ref(false);
 const verificandoCodigo = ref(false);
-const dispositivoId = ref('');
+const usuarioId = ref('');
 const navegadorInfo = ref('');
 
 // Computed properties
@@ -167,194 +174,211 @@ const descargasRestantes = computed(() => limiteDescargas.value - descargasUsada
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
 onMounted(async () => {
-  const datos = JSON.parse(localStorage.getItem('usuario'));
-  if (datos?.nombre) nombre.value = datos.nombre;
-  
-  // Generar información del dispositivo
-  await generarInfoDispositivo();
-  
-  // Cargar contador de descargas
-  await cargarContadorDescargas();
+  await inicializarSistema();
 });
 
-// Función para generar un fingerprint único del dispositivo
-async function generarInfoDispositivo() {
+// Watcher para cambios en el nombre del usuario
+watch(nombre, async (nuevoNombre, nombreAnterior) => {
+  if (nuevoNombre !== nombreAnterior && nuevoNombre !== 'Invitado') {
+    await actualizarSistemaUsuario();
+  }
+});
+
+async function inicializarSistema() {
+  // Cargar datos del usuario desde localStorage
+  const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
+  if (datos?.nombre) {
+    nombre.value = datos.nombre;
+  }
+  
+  // Generar información del navegador
+  generarInfoNavegador();
+  
+  // Generar ID único para el usuario actual
+  await generarUsuarioId();
+  
+  // Cargar contador de descargas específico del usuario
+  await cargarContadorUsuario();
+}
+
+async function actualizarSistemaUsuario() {
+  // Regenerar el ID de usuario cuando cambia el nombre
+  await generarUsuarioId();
+  await cargarContadorUsuario();
+}
+
+function generarInfoNavegador() {
   try {
-    // Obtener información del navegador y sistema
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    ctx.textBaseline = 'top';
-    ctx.font = '14px Arial';
-    ctx.fillText('Fingerprint test', 2, 2);
-    const canvasFingerprint = canvas.toDataURL();
+    const userAgent = navigator.userAgent;
+    const platform = navigator.platform;
     
-    const navegador = {
-      userAgent: navigator.userAgent,
-      language: navigator.language,
-      platform: navigator.platform,
-      cookieEnabled: navigator.cookieEnabled,
-      onLine: navigator.onLine,
-      doNotTrack: navigator.doNotTrack,
-      hardwareConcurrency: navigator.hardwareConcurrency || 0,
-      maxTouchPoints: navigator.maxTouchPoints || 0
-    };
+    // Extraer información básica del navegador
+    let browserName = 'Unknown';
+    if (userAgent.includes('Firefox')) browserName = 'Firefox';
+    else if (userAgent.includes('Chrome')) browserName = 'Chrome';
+    else if (userAgent.includes('Safari')) browserName = 'Safari';
+    else if (userAgent.includes('Edge')) browserName = 'Edge';
     
-    const pantalla = {
-      width: screen.width,
-      height: screen.height,
-      availWidth: screen.availWidth,
-      availHeight: screen.availHeight,
-      colorDepth: screen.colorDepth,
-      pixelDepth: screen.pixelDepth
-    };
-    
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
-    // Crear un hash único del dispositivo
-    const deviceData = JSON.stringify({
-      navegador,
-      pantalla,
-      timezone,
-      canvasFingerprint: canvasFingerprint.slice(0, 50), // Solo una parte del canvas
-      timestamp: Math.floor(Date.now() / (1000 * 60 * 60 * 24)) // Día actual
-    });
-    
-    // Generar hash simple pero efectivo
-    dispositivoId.value = await generarHash(deviceData);
-    navegadorInfo.value = `${navegador.platform} - ${navegador.userAgent.split(' ').slice(-2).join(' ')}`;
-    
+    navegadorInfo.value = `${platform} - ${browserName}`;
   } catch (error) {
-    console.error('Error generando info del dispositivo:', error);
-    // Fallback con información básica
-    dispositivoId.value = await generarHash(navigator.userAgent + screen.width + screen.height);
-    navegadorInfo.value = navigator.platform;
+    navegadorInfo.value = 'Navegador desconocido';
   }
 }
 
-// Función para generar hash simple
-async function generarHash(texto) {
+async function generarUsuarioId() {
+  try {
+    // Crear un ID único basado en el nombre del usuario y datos adicionales
+    const datosUsuario = {
+      nombre: nombre.value.toLowerCase().trim(),
+      timestamp: Math.floor(Date.now() / (1000 * 60 * 60 * 24)), // Día actual
+      navegador: navigator.userAgent.substring(0, 50), // Primeros 50 caracteres
+      idioma: navigator.language,
+    };
+    
+    const cadenaUsuario = JSON.stringify(datosUsuario);
+    usuarioId.value = await generarHashUsuario(cadenaUsuario);
+    
+  } catch (error) {
+    console.error('Error generando ID de usuario:', error);
+    // Fallback simple
+    usuarioId.value = await generarHashUsuario(nombre.value + Date.now().toString());
+  }
+}
+
+async function generarHashUsuario(texto) {
+  // Generar un hash determinístico pero único para el usuario
   let hash = 0;
   for (let i = 0; i < texto.length; i++) {
     const char = texto.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convertir a entero de 32 bits
   }
-  return Math.abs(hash).toString(36).toUpperCase().padStart(8, '0');
-}
-
-// Sistema de almacenamiento múltiple y persistente
-function obtenerClavesPersistencia() {
-  return [
-    `pdf_counter_${dispositivoId.value}`, // Clave principal basada en dispositivo
-    `pdf_backup_${dispositivoId.value}`, // Respaldo
-    `pdf_legacy_${dispositivoId.value}`, // Legacy para compatibilidad
-    'pdf_global_counter', // Contador global como último recurso
-  ];
-}
-
-async function cargarContadorDescargas() {
-  if (!dispositivoId.value) return;
   
-  const claves = obtenerClavesPersistencia();
+  // Agregar el nombre como prefijo para hacer más legible el ID
+  const nombreLimpio = nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+  const hashStr = Math.abs(hash).toString(36).toUpperCase().padStart(6, '0');
+  
+  return `${nombreLimpio.substring(0, 4)}_${hashStr}`;
+}
+
+function obtenerClavesUsuario() {
+  const nombreSeguro = nombre.value.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
+  
+  return {
+    principal: `pdf_user_${usuarioId.value}`,
+    backup: `pdf_backup_${usuarioId.value}`,
+    legacy: `pdf_legacy_${nombreSeguro}`,
+    global: `pdf_users_registry`
+  };
+}
+
+async function cargarContadorUsuario() {
+  if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
+    // Si no hay usuario válido, usar valores por defecto
+    descargasUsadas.value = 0;
+    limiteDescargas.value = 3;
+    return;
+  }
+  
+  const claves = obtenerClavesUsuario();
   let contadorCargado = false;
   
-  // Intentar cargar desde diferentes fuentes
-  for (const clave of claves) {
+  // Intentar cargar desde la clave principal del usuario
+  try {
+    const datos = localStorage.getItem(claves.principal);
+    if (datos) {
+      const info = JSON.parse(datos);
+      if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
+        descargasUsadas.value = Math.max(0, info.usadas || 0);
+        limiteDescargas.value = Math.max(1, info.limite || 3);
+        contadorCargado = true;
+        console.log(`Contador cargado para usuario: ${nombre.value} (${usuarioId.value})`);
+      }
+    }
+  } catch (error) {
+    console.error('Error cargando contador principal:', error);
+  }
+  
+  // Si no se pudo cargar, intentar con backup
+  if (!contadorCargado) {
     try {
-      const datos = localStorage.getItem(clave);
-      if (datos) {
-        const info = JSON.parse(datos);
-        if (info.dispositivoId === dispositivoId.value || clave.includes('global')) {
+      const datosBackup = localStorage.getItem(claves.backup);
+      if (datosBackup) {
+        const info = JSON.parse(datosBackup);
+        if (info.usuarioId === usuarioId.value) {
           descargasUsadas.value = Math.max(0, info.usadas || 0);
           limiteDescargas.value = Math.max(1, info.limite || 3);
           contadorCargado = true;
-          console.log(`Contador cargado desde: ${clave}`);
-          break;
+          console.log(`Contador cargado desde backup para: ${nombre.value}`);
         }
       }
     } catch (error) {
-      console.error(`Error cargando desde ${clave}:`, error);
-      continue;
+      console.error('Error cargando backup:', error);
     }
   }
   
+  // Si es la primera vez para este usuario, inicializar
   if (!contadorCargado) {
-    // Primera vez - verificar si hay indicios de uso previo
-    const indiciosUso = verificarIndiciosUsoPrevio();
-    if (indiciosUso.detectado) {
-      descargasUsadas.value = limiteDescargas.value; // Bloquear por defecto
-      console.log('Indicios de uso previo detectados - aplicando bloqueo preventivo');
-    } else {
-      descargasUsadas.value = 0;
-    }
-    await guardarContadorDescargas();
+    descargasUsadas.value = 0;
+    limiteDescargas.value = 3;
+    await guardarContadorUsuario();
+    await registrarUsuario();
+    console.log(`Nuevo usuario inicializado: ${nombre.value} (${usuarioId.value})`);
   }
   
   // Validar límites
   if (descargasUsadas.value > limiteDescargas.value) {
     descargasUsadas.value = limiteDescargas.value;
-    await guardarContadorDescargas();
+    await guardarContadorUsuario();
   }
 }
 
-function verificarIndiciosUsoPrevio() {
-  try {
-    // Buscar cualquier clave relacionada con PDF en localStorage
-    const clavesRelacionadas = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const clave = localStorage.key(i);
-      if (clave && (clave.includes('pdf') || clave.includes('download'))) {
-        clavesRelacionadas.push(clave);
-      }
-    }
-    
-    // Si hay muchas claves relacionadas, posible intento de bypass
-    if (clavesRelacionadas.length > 3) {
-      return { detectado: true, razon: 'Múltiples claves PDF detectadas' };
-    }
-    
-    // Verificar patrones sospechosos en el historial
-    if (window.history && window.history.length > 50) {
-      return { detectado: true, razon: 'Historial extenso detectado' };
-    }
-    
-    return { detectado: false };
-    
-  } catch (error) {
-    // En caso de error, ser conservador
-    return { detectado: true, razon: 'Error en verificación' };
+async function guardarContadorUsuario() {
+  if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
+    return;
   }
-}
-
-async function guardarContadorDescargas() {
-  if (!dispositivoId.value) return;
   
   const info = {
-    dispositivoId: dispositivoId.value,
+    usuarioId: usuarioId.value,
+    nombre: nombre.value,
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
     ultimaDescarga: new Date().toISOString(),
     fechaCreacion: new Date().toISOString(),
     navegadorInfo: navegadorInfo.value,
-    version: '2.0' // Para futuras migraciones
+    version: '3.0' // Nueva versión para sistema por usuarios
   };
   
-  const claves = obtenerClavesPersistencia();
+  const claves = obtenerClavesUsuario();
   
-  // Guardar en múltiples ubicaciones
-  for (const clave of claves) {
-    try {
-      localStorage.setItem(clave, JSON.stringify(info));
-    } catch (error) {
-      console.error(`Error guardando en ${clave}:`, error);
-    }
-  }
-  
-  // También intentar guardar en sessionStorage como respaldo
+  // Guardar en clave principal y backup
   try {
-    sessionStorage.setItem(`pdf_session_${dispositivoId.value}`, JSON.stringify(info));
+    localStorage.setItem(claves.principal, JSON.stringify(info));
+    localStorage.setItem(claves.backup, JSON.stringify(info));
+    
+    console.log(`Contador guardado para usuario: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
   } catch (error) {
-    console.error('Error guardando en sessionStorage:', error);
+    console.error('Error guardando contador de usuario:', error);
+  }
+}
+
+async function registrarUsuario() {
+  // Mantener un registro de todos los usuarios para administración
+  try {
+    const claves = obtenerClavesUsuario();
+    const registro = JSON.parse(localStorage.getItem(claves.global) || '{}');
+    
+    registro[usuarioId.value] = {
+      nombre: nombre.value,
+      usuarioId: usuarioId.value,
+      fechaRegistro: new Date().toISOString(),
+      ultimaActividad: new Date().toISOString(),
+      navegadorInfo: navegadorInfo.value
+    };
+    
+    localStorage.setItem(claves.global, JSON.stringify(registro));
+  } catch (error) {
+    console.error('Error registrando usuario:', error);
   }
 }
 
@@ -367,6 +391,12 @@ function manejarClickBoton() {
 }
 
 async function generarPDF() {
+  // Verificar que tenemos un usuario válido
+  if (!nombre.value || nombre.value === 'Invitado') {
+    alert('Por favor, asegúrate de que tu nombre de usuario esté configurado correctamente.');
+    return;
+  }
+  
   if (limiteAlcanzado.value) {
     mostrarModalLimite.value = true;
     return;
@@ -396,7 +426,9 @@ async function generarPDF() {
       
     // Incrementar contador DESPUÉS de descarga exitosa
     descargasUsadas.value++;
-    await guardarContadorDescargas();
+    await guardarContadorUsuario();
+    
+    console.log(`PDF generado exitosamente para ${nombre.value}. Descargas: ${descargasUsadas.value}/${limiteDescargas.value}`);
     
     // Si alcanzó el límite, mostrar modal
     if (limiteAlcanzado.value) {
@@ -424,10 +456,10 @@ function cerrarModal() {
 async function copiarInfoCompleta() {
   try {
     const infoCompleta = `
-Solicitud de desbloqueo de PDF
-==============================
-Nombre: ${nombre.value}
-ID del dispositivo: ${dispositivoId.value}
+Solicitud de desbloqueo de PDF - Usuario Individual
+================================================
+Nombre del usuario: ${nombre.value}
+ID único del usuario: ${usuarioId.value}
 Navegador: ${navegadorInfo.value}
 Descargas usadas: ${descargasUsadas.value}/${limiteDescargas.value}
 
@@ -436,7 +468,7 @@ Randy Simanca
 +57 314 519 3285
 randysimancamercado@gmail.com
 
-Por favor, proporciona un código de desbloqueo para este dispositivo.
+Por favor, proporciona un código de desbloqueo específico para este usuario.
     `.trim();
     
     await navigator.clipboard.writeText(infoCompleta);
@@ -447,7 +479,7 @@ Por favor, proporciona un código de desbloqueo para este dispositivo.
   } catch (error) {
     console.error('Error al copiar:', error);
     // Fallback
-    const textoFallback = `ID: ${dispositivoId.value} - Randy Simanca: +57 314 519 3285`;
+    const textoFallback = `Usuario: ${nombre.value} - ID: ${usuarioId.value} - Randy: +57 314 519 3285`;
     try {
       const textArea = document.createElement('textarea');
       textArea.value = textoFallback;
@@ -458,7 +490,7 @@ Por favor, proporciona un código de desbloqueo para este dispositivo.
       textoCopiado.value = true;
       setTimeout(() => textoCopiado.value = false, 3000);
     } catch (fallbackError) {
-      alert(`ID del dispositivo: ${dispositivoId.value}\nTeléfono: +57 314 519 3285`);
+      alert(`Usuario: ${nombre.value}\nID: ${usuarioId.value}\nTeléfono: +57 314 519 3285`);
     }
   }
 }
@@ -476,30 +508,34 @@ async function verificarCodigo() {
   
   const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
   
-  // Códigos específicos por dispositivo (más seguros)
-  const codigoEspecifico = `UNLOCK_${dispositivoId.value}_2024`;
-  const codigosGlobales = [
+  // Códigos específicos por usuario (más seguros y específicos)
+  const codigoEspecificoUsuario = `UNLOCK_${usuarioId.value}_2024`;
+  const codigoEspecificoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_2024`;
+  
+  const codigosValidos = [
     'RANDYADMIN1208',
     'MASTER_RESET_2024',
     'EMERGENCY_UNLOCK',
-    codigoEspecifico
+    codigoEspecificoUsuario,
+    codigoEspecificoNombre,
+    `USER_${usuarioId.value}` // Código alternativo más simple
   ];
   
-  if (codigosGlobales.includes(codigoIngresado)) {
-    // Código válido - resetear contador
+  if (codigosValidos.includes(codigoIngresado)) {
+    // Código válido - resetear contador para este usuario específico
     descargasUsadas.value = 0;
-    await guardarContadorDescargas();
+    await guardarContadorUsuario();
     
-    // Log del desbloqueo para auditoria
-    console.log(`Desbloqueo exitoso: ${codigoIngresado} para dispositivo ${dispositivoId.value}`);
+    // Log del desbloqueo para auditoría
+    console.log(`Desbloqueo exitoso para usuario: ${nombre.value} (${usuarioId.value}) con código: ${codigoIngresado}`);
     
-    mostrarMensajeVerificacion('¡Código válido! Se han restablecido tus descargas disponibles.', false);
+    mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
     
     setTimeout(() => {
       cerrarModal();
     }, 2000);
   } else {
-    mostrarMensajeVerificacion(`Código inválido. Tu ID de dispositivo es: ${dispositivoId.value}`, true);
+    mostrarMensajeVerificacion(`Código inválido para el usuario ${nombre.value}. Tu ID es: ${usuarioId.value}`, true);
   }
   
   verificandoCodigo.value = false;
@@ -517,59 +553,87 @@ function mostrarMensajeVerificacion(mensaje, error) {
   }
 }
 
-// Función para desarrollo/testing
-function resetearContador() {
+// Funciones para desarrollo/testing
+function resetearContadorUsuario() {
   if (import.meta.env.DEV) {
     descargasUsadas.value = 0;
-    guardarContadorDescargas();
-    console.log('Contador reseteado para dispositivo:', dispositivoId.value);
+    guardarContadorUsuario();
+    console.log(`Contador reseteado para usuario: ${nombre.value} (${usuarioId.value})`);
   }
 }
 
-function verContadores() {
+function verTodosLosUsuarios() {
   if (import.meta.env.DEV) {
-    const contadores = {};
+    const usuarios = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
-      if (key && key.includes('pdf')) {
+      if (key && key.startsWith('pdf_user_')) {
         try {
           const data = JSON.parse(localStorage.getItem(key));
-          contadores[key] = data;
+          usuarios[key] = data;
         } catch (e) {
-          contadores[key] = localStorage.getItem(key);
+          usuarios[key] = localStorage.getItem(key);
         }
       }
     }
-    console.log('Contadores:', contadores);
-    console.log('Dispositivo actual:', dispositivoId.value);
+    console.log('Usuarios registrados:', usuarios);
+    
+    // También mostrar el registro global
+    try {
+      const registro = JSON.parse(localStorage.getItem('pdf_users_registry') || '{}');
+      console.log('Registro global:', registro);
+    } catch (e) {
+      console.log('Sin registro global');
+    }
+  }
+}
+
+function limpiarDatosDesarrollo() {
+  if (import.meta.env.DEV) {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.includes('pdf_')) {
+        keys.push(key);
+      }
+    }
+    keys.forEach(key => localStorage.removeItem(key));
+    console.log('Datos de PDF limpiados:', keys);
+    location.reload();
   }
 }
 
 // Exponer funciones para desarrollo
 if (import.meta.env.DEV) {
-  window.resetearContadorPDF = resetearContador;
-  window.verContadoresPDF = verContadores;
-  window.dispositivoActual = () => dispositivoId.value;
-  window.generarCodigoDesbloqueo = () => `UNLOCK_${dispositivoId.value}_2024`;
+  window.resetearContadorUsuarioPDF = resetearContadorUsuario;
+  window.verTodosLosUsuariosPDF = verTodosLosUsuarios;
+  window.limpiarDatosPDF = limpiarDatosDesarrollo;
+  window.usuarioActual = () => ({ nombre: nombre.value, id: usuarioId.value });
+  window.generarCodigoUsuario = () => `UNLOCK_${usuarioId.value}_2024`;
 }
 
-// Interceptar intentos de manipulación del localStorage
+// Sistema de protección mejorado para múltiples usuarios
 if (typeof window !== 'undefined') {
   const originalSetItem = localStorage.setItem;
   const originalRemoveItem = localStorage.removeItem;
   const originalClear = localStorage.clear;
   
   localStorage.setItem = function(key, value) {
-    if (key.includes('pdf') && !key.includes(dispositivoId.value)) {
-      console.warn('Intento de manipulación detectado');
+    // Permitir que cada usuario tenga sus propias claves
+    if (key.includes('pdf_user_') && !key.includes(usuarioId.value)) {
+      // Permitir que otros usuarios tengan sus propios contadores
+      return originalSetItem.call(this, key, value);
+    }
+    if (key.includes('pdf_') && !key.includes('user_') && !key.includes('users_registry')) {
+      console.warn('Intento de manipulación de datos PDF detectado');
       return;
     }
     return originalSetItem.call(this, key, value);
   };
   
   localStorage.removeItem = function(key) {
-    if (key.includes('pdf')) {
-      console.warn('Intento de eliminación detectado');
+    if (key.includes('pdf_') && !key.includes(usuarioId.value)) {
+      console.warn('Intento de eliminación de datos de otros usuarios detectado');
       return;
     }
     return originalRemoveItem.call(this, key);
@@ -577,12 +641,12 @@ if (typeof window !== 'undefined') {
   
   localStorage.clear = function() {
     console.warn('Intento de limpieza completa detectado');
-    // Permitir clear pero recargar inmediatamente los contadores
     const resultado = originalClear.call(this);
     setTimeout(() => {
-      if (dispositivoId.value) {
+      // Recargar solo el usuario actual, no afectar a otros
+      if (usuarioId.value && nombre.value) {
         descargasUsadas.value = limiteDescargas.value; // Bloquear por seguridad
-        guardarContadorDescargas();
+        guardarContadorUsuario();
       }
     }, 100);
     return resultado;
@@ -645,14 +709,14 @@ if (typeof window !== 'undefined') {
 .btn-icon { font-size: 18px; line-height: 1; }
 .btn-text { font-size: 14px; }
 
-/* Contador visual */
+/* Contador visual mejorado */
 .contador-info {
   position: fixed;
   right: 24px;
   bottom: 90px;
   background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(10px);
-  padding: 10px 14px;
+  padding: 12px 16px;
   border-radius: 12px;
   box-shadow: 0 4px 20px rgba(0,0,0,0.1);
   font-size: 12px;
@@ -685,471 +749,6 @@ if (typeof window !== 'undefined') {
 .contador-barra {
   width: 140px;
   height: 6px;
-  background: #e5e7eb;
-  border-radius: 3px;
-  overflow: hidden;
+  background: #e5e7eb
 }
-
-.contador-progreso {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-  transition: width 0.3s ease;
-  border-radius: 3px;
-}
-
-/* Sección de información del dispositivo */
-.device-info {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  border-radius: 12px;
-  border: 1px solid #0ea5e9;
-}
-
-.device-info h4 {
-  margin: 0 0 1rem 0;
-  color: #0369a1;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.device-details {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.device-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.device-label {
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: #0369a1;
-}
-
-.device-value {
-  font-size: 0.875rem;
-  color: #1e293b;
-  background: white;
-  padding: 0.5rem 0.75rem;
-  border-radius: 6px;
-  border: 1px solid #cbd5e1;
-  word-break: break-all;
-}
-
-code.device-value {
-  font-family: 'Courier New', monospace;
-  font-weight: 600;
-  background: #1e293b;
-  color: #10b981;
-  border-color: #374151;
-}
-
-/* Modal estilos mantenidos iguales */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  animation: fadeIn 0.3s ease;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 20px;
-  max-width: 600px;
-  width: 95%;
-  max-height: 90vh;
-  overflow: hidden;
-  box-shadow: 0 25px 50px rgba(0,0,0,0.4);
-  animation: slideIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
-  border: 1px solid rgba(255,255,255,0.1);
-}
-
-.modal-header {
-  padding: 1.5rem 2rem;
-  border-bottom: 1px solid #f1f5f9;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #dc2626;
-  font-size: 1.3rem;
-  font-weight: 700;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #64748b;
-  padding: 4px;
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 50%;
-  transition: all 0.2s ease;
-}
-
-.close-btn:hover {
-  background: #f1f5f9;
-  color: #374151;
-  transform: scale(1.1);
-}
-
-.modal-body {
-  padding: 2rem;
-  line-height: 1.6;
-  max-height: 65vh;
-  overflow-y: auto;
-}
-
-.limit-info {
-  text-align: center;
-  margin-bottom: 1.5rem;
-}
-
-.limit-badge {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  background: linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%);
-  padding: 1rem 1.5rem;
-  border-radius: 12px;
-  border: 2px solid #fecaca;
-}
-
-.limit-number {
-  font-size: 2rem;
-  font-weight: 700;
-  color: #dc2626;
-  line-height: 1;
-}
-
-.limit-text {
-  font-size: 0.875rem;
-  color: #991b1b;
-  font-weight: 500;
-  margin-top: 0.25rem;
-}
-
-.main-message {
-  text-align: center;
-  font-size: 1.1rem;
-  color: #374151;
-  margin-bottom: 2rem;
-  font-weight: 500;
-}
-
-.unlock-section, .contact-section {
-  margin-bottom: 2rem;
-  padding: 1.5rem;
-  background: #f8fafc;
-  border-radius: 12px;
-  border: 1px solid #e2e8f0;
-}
-
-.unlock-section h4, .contact-section h4 {
-  margin: 0 0 0.75rem 0;
-  color: #1e293b;
-  font-size: 1.1rem;
-  font-weight: 600;
-}
-
-.unlock-section p, .contact-section p {
-  margin-bottom: 1rem;
-  color: #475569;
-}
-
-.codigo-desbloqueo {
-  margin-top: 1rem;
-}
-
-.input-wrapper {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 0.75rem;
-}
-
-.codigo-input {
-  flex: 1;
-  padding: 0.875rem 1rem;
-  border-radius: 8px;
-  border: 2px solid #e2e8f0;
-  font-size: 1rem;
-  transition: all 0.2s ease;
-  background: white;
-}
-
-.codigo-input:focus {
-  outline: none;
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-}
-
-.btn-verificar {
-  padding: 0.875rem 1.5rem;
-  background: linear-gradient(135deg, #10b981 0%, #059669 100%);
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  min-width: 100px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.btn-verificar:hover:not(:disabled) {
-  background: linear-gradient(135deg, #059669 0%, #047857 100%);
-  transform: translateY(-1px);
-}
-
-.btn-verificar:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  transform: none;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-.mensaje-verificacion {
-  padding: 0.75rem 1rem;
-  border-radius: 8px;
-  font-size: 0.875rem;
-  font-weight: 500;
-  animation: slideDown 0.3s ease;
-}
-
-.mensaje-verificacion.error {
-  background: #fef2f2;
-  color: #dc2626;
-  border: 1px solid #fecaca;
-}
-
-.mensaje-verificacion.success {
-  background: #f0fdf4;
-  color: #166534;
-  border: 1px solid #bbf7d0;
-}
-
-.contact-info {
-  background: white;
-  padding: 1rem;
-  border-radius: 8px;
-  border: 1px solid #e2e8f0;
-}
-
-.contact-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  margin-bottom: 0.75rem;
-  padding: 0.5rem;
-  border-radius: 6px;
-  transition: background 0.2s ease;
-}
-
-.contact-item:hover {
-  background: #f8fafc;
-}
-
-.contact-item:last-child {
-  margin-bottom: 0;
-}
-
-.contact-icon {
-  font-size: 1.1rem;
-  width: 24px;
-  text-align: center;
-}
-
-.note-section {
-  text-align: center;
-  padding: 1rem;
-  background: linear-gradient(135deg, #fef7ff 0%, #faf5ff 100%);
-  border-radius: 8px;
-  border: 1px solid #e9d5ff;
-}
-
-.note {
-  font-size: 0.875rem;
-  color: #7c3aed;
-  font-weight: 500;
-  margin: 0;
-}
-
-.modal-footer {
-  padding: 1.5rem 2rem;
-  border-top: 1px solid #f1f5f9;
-  display: flex;
-  gap: 0.75rem;
-  justify-content: flex-end;
-  background: #f8fafc;
-}
-
-.btn-primary, .btn-secondary {
-  padding: 0.75rem 1.5rem;
-  border-radius: 8px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-  border: none;
-  font-size: 0.875rem;
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
-  color: white;
-}
-
-.btn-primary:hover {
-  background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
-  transform: translateY(-1px);
-}
-
-.btn-secondary {
-  background: #64748b;
-  color: white;
-}
-
-.btn-secondary:hover {
-  background: #475569;
-  transform: translateY(-1px);
-}
-
-.spinner {
-  width: 20px;
-  height: 20px;
-  border: 2px solid rgba(255,255,255,0.35);
-  border-top-color: #fff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin { 
-  from { transform: rotate(0deg); } 
-  to { transform: rotate(360deg); } 
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
-}
-
-@keyframes slideIn {
-  from { 
-    transform: translateY(-30px) scale(0.9); 
-    opacity: 0; 
-  }
-  to { 
-    transform: translateY(0) scale(1); 
-    opacity: 1; 
-  }
-}
-
-@keyframes slideDown {
-  from {
-    transform: translateY(-10px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
-}
-
-.generando-pdf .no-imprimir { display: none !important; }
-
-@media (max-width: 768px) {
-  .modal-content {
-    width: 95%;
-    margin: 1rem;
-    border-radius: 16px;
-    max-width: none;
-  }
-  
-  .modal-header {
-    padding: 1.25rem 1.5rem;
-  }
-  
-  .modal-body {
-    padding: 1.5rem;
-    max-height: 70vh;
-  }
-  
-  .modal-footer {
-    flex-direction: column;
-    padding: 1.25rem 1.5rem;
-  }
-  
-  .input-wrapper {
-    flex-direction: column;
-  }
-  
-  .contador-info {
-    right: 16px;
-    bottom: 80px;
-  }
-  
-  .pdf-button {
-    right: 16px;
-    bottom: 16px;
-    min-width: 160px;
-  }
-  
-  .unlock-section, .contact-section, .device-info {
-    padding: 1.25rem;
-  }
-  
-  .limit-badge {
-    padding: 0.75rem 1.25rem;
-  }
-  
-  .limit-number {
-    font-size: 1.75rem;
-  }
-  
-  .main-message {
-    font-size: 1rem;
-  }
-  
-  .device-details {
-    gap: 0.5rem;
-  }
-  
-  .device-value {
-    font-size: 0.8rem;
-    padding: 0.5rem;
-  }
-}</style>
+  </style>
