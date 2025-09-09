@@ -17,6 +17,7 @@ import experienciaTotRoutes from "./routes/experienciaTot.js";
 import pdfRoutes from "./routes/pdf.js";
 import idiomasRoutes from "./routes/idiomas.js";
 import firmaServidorRoutes from "./routes/firmaServidor.js";
+import unlockRoutes from "./routes/unlock.js";
 
 
 dotenv.config();
@@ -48,6 +49,7 @@ app.use("/api/pdf", pdfRoutes);
 app.use("/api", hojaRoutes); 
 app.use("/api/idiomas", idiomasRoutes);
 app.use("/api/firma-servidor", firmaServidorRoutes);
+app.use("/api/unlock", unlockRoutes);
 
 // --- Configuración de frontend MEJORADA ---
 const __filename = fileURLToPath(import.meta.url);
