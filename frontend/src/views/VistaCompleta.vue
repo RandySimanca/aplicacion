@@ -173,6 +173,79 @@ const navegadorInfo = ref('');
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
+// Persistencia reforzada: IndexedDB para que el bloqueo perdure tras cerrar sesión
+let idbInstance = null;
+
+function abrirBD() {
+  return new Promise((resolve, reject) => {
+    if (idbInstance) {
+      resolve(idbInstance);
+      return;
+    }
+    const request = window.indexedDB.open('pdfLimiterDB', 1);
+    request.onupgradeneeded = (event) => {
+      const db = event.target.result;
+      if (!db.objectStoreNames.contains('userCounters')) {
+        db.createObjectStore('userCounters', { keyPath: 'usuarioId' });
+      }
+      if (!db.objectStoreNames.contains('usersRegistry')) {
+        db.createObjectStore('usersRegistry', { keyPath: 'usuarioId' });
+      }
+    };
+    request.onsuccess = (event) => {
+      idbInstance = event.target.result;
+      resolve(idbInstance);
+    };
+    request.onerror = () => reject(request.error);
+  });
+}
+
+async function idbObtenerContador(usuarioIdClave) {
+  try {
+    const db = await abrirBD();
+    return await new Promise((resolve, reject) => {
+      const tx = db.transaction('userCounters', 'readonly');
+      const store = tx.objectStore('userCounters');
+      const getReq = store.get(usuarioIdClave);
+      getReq.onsuccess = () => resolve(getReq.result || null);
+      getReq.onerror = () => reject(getReq.error);
+    });
+  } catch (e) {
+    console.warn('IndexedDB no disponible para obtener contador:', e);
+    return null;
+  }
+}
+
+async function idbGuardarContador(info) {
+  try {
+    const db = await abrirBD();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('userCounters', 'readwrite');
+      const store = tx.objectStore('userCounters');
+      const putReq = store.put(info);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    });
+  } catch (e) {
+    console.warn('IndexedDB no disponible para guardar contador:', e);
+  }
+}
+
+async function idbRegistrarUsuario(registro) {
+  try {
+    const db = await abrirBD();
+    await new Promise((resolve, reject) => {
+      const tx = db.transaction('usersRegistry', 'readwrite');
+      const store = tx.objectStore('usersRegistry');
+      const putReq = store.put(registro);
+      putReq.onsuccess = () => resolve();
+      putReq.onerror = () => reject(putReq.error);
+    });
+  } catch (e) {
+    console.warn('IndexedDB no disponible para registrar usuario:', e);
+  }
+}
+
 onMounted(async () => {
   await inicializarSistema();
 });
@@ -312,20 +385,38 @@ async function cargarContadorUsuario() {
   const claves = obtenerClavesUsuario();
   let contadorCargado = false;
   
-  // Intentar cargar desde la clave principal del usuario
+  // 1) Intentar cargar desde IndexedDB (persistente tras logout)
   try {
-    const datos = localStorage.getItem(claves.principal);
-    if (datos) {
-      const info = JSON.parse(datos);
-      if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
-        descargasUsadas.value = Math.max(0, info.usadas || 0);
-        limiteDescargas.value = Math.max(1, info.limite || 1);
-        contadorCargado = true;
-        console.log(`Contador cargado para usuario: ${nombre.value} (${usuarioId.value})`);
-      }
+    const infoIdb = await idbObtenerContador(usuarioId.value);
+    if (infoIdb && infoIdb.usuarioId === usuarioId.value) {
+      // Validar aislamiento por usuario
+      descargasUsadas.value = Math.max(0, infoIdb.usadas || 0);
+      limiteDescargas.value = Math.max(1, infoIdb.limite || 1);
+      contadorCargado = true;
+      console.log(`Contador (IDB) cargado para usuario: ${nombre.value} (${usuarioId.value})`);
     }
-  } catch (error) {
-    console.error('Error cargando contador principal:', error);
+  } catch (e) {
+    console.warn('Fallo carga desde IndexedDB, probando localStorage...');
+  }
+  
+  // Intentar cargar desde la clave principal del usuario
+  if (!contadorCargado) {
+    try {
+      const datos = localStorage.getItem(claves.principal);
+      if (datos) {
+        const info = JSON.parse(datos);
+        if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
+          descargasUsadas.value = Math.max(0, info.usadas || 0);
+          limiteDescargas.value = Math.max(1, info.limite || 1);
+          contadorCargado = true;
+          console.log(`Contador (LS) cargado para usuario: ${nombre.value} (${usuarioId.value})`);
+          // Sincronizar a IndexedDB para persistencia robusta
+          await idbGuardarContador({ ...info });
+        }
+      }
+    } catch (error) {
+      console.error('Error cargando contador principal:', error);
+    }
   }
   
   // Si no se pudo cargar, intentar con backup
@@ -339,6 +430,8 @@ async function cargarContadorUsuario() {
           limiteDescargas.value = Math.max(1, info.limite || 1);
           contadorCargado = true;
           console.log(`Contador cargado desde backup para: ${nombre.value}`);
+          // Sincronizar a IndexedDB para persistencia robusta
+          await idbGuardarContador({ ...info });
         }
       }
     } catch (error) {
@@ -384,6 +477,7 @@ async function guardarContadorUsuario() {
   try {
     localStorage.setItem(claves.principal, JSON.stringify(info));
     localStorage.setItem(claves.backup, JSON.stringify(info));
+    await idbGuardarContador(info);
     
     console.log(`Contador guardado para usuario: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
   } catch (error) {
@@ -406,6 +500,7 @@ async function registrarUsuario() {
     };
     
     localStorage.setItem(claves.global, JSON.stringify(registro));
+    await idbRegistrarUsuario(registro[usuarioId.value]);
   } catch (error) {
     console.error('Error registrando usuario:', error);
   }
