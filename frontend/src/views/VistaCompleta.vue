@@ -510,14 +510,6 @@ async function registrarUsuario() {
   }
 }
 
-function manejarClickBoton() {
-  if (limiteAlcanzado.value) {
-    mostrarModalLimite.value = true;
-  } else {
-    generarPDF();
-  }
-}
-
 async function generarPDF() {
   // Verificar que tenemos un usuario válido
   if (!nombre.value || nombre.value === 'Invitado') {
@@ -1420,4 +1412,5 @@ async function verificarCodigo() {
 }
 
 </style>
+
 
