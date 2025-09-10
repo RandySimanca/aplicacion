@@ -1,23 +1,11 @@
 // backend/controllers/pdfControllers.js
 import PDFDocument from 'pdfkit';
 import { Readable } from 'stream';
-import Usuario from '../models/Usuario.js';
-import DownloadLog from '../models/DownloadLog.js';
 
 export const generarPDF = async (req, res) => {
   try {
     console.log('🧾 Datos recibidos:', req.body);
     const { datosPersonales, formacionAcademica, experiencia, experienciaTot } = req.body;
-
-    // Si el usuario está bloqueado, denegar
-    try {
-      if (req.user?.uid) {
-        const u = await Usuario.findById(req.user.uid).select('bloqueado');
-        if (u?.bloqueado) {
-          return res.status(423).json({ error: 'Usuario bloqueado. Ingrese un código de desbloqueo.' });
-        }
-      }
-    } catch {}
 
     const doc = new PDFDocument();
     const stream = new Readable().wrap(doc);
@@ -61,27 +49,11 @@ export const generarPDF = async (req, res) => {
       doc.moveDown();
     }
 
-    // Log y contador de descargas
-    const usuarioId = req.user?.uid;
-    const ip = req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress;
-    const userAgent = req.headers['user-agent'];
-    try {
-      if (usuarioId) {
-        await Usuario.findByIdAndUpdate(usuarioId, { $inc: { descargasRealizadas: 1 } });
-      }
-      await DownloadLog.create({ usuarioId, ip, userAgent, success: true });
-    } catch (e) {
-      console.error('No se pudo registrar la descarga:', e?.message);
-    }
-
     doc.end();
     stream.pipe(res);
 
   } catch (error) {
     console.error('❌ Error al generar PDF:', error);
-    try {
-      await DownloadLog.create({ usuarioId: req.user?.uid, ip: req.headers['x-forwarded-for']?.split(',')[0] || req.socket?.remoteAddress, userAgent: req.headers['user-agent'], success: false, reason: error?.message });
-    } catch {}
     res.status(500).json({ error: 'Error al generar el PDF' });
   }
 };
