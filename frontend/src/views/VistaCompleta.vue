@@ -776,6 +776,175 @@ if (typeof window !== 'undefined') {
     return resultado;
   };
 }
+
+// Función actualizada para generar PDF con manejo del backend
+// Agregar esta función a VistaCompleta.vue
+
+import { verifyUnlockCode } from '../api/unlockAPI';
+import api from '../helpers/axiosInstance';
+
+// ... resto del código existente ...
+
+async function generarPDFBackend() {
+  try {
+    generando.value = true;
+    
+    // Obtener datos de la hoja de vida
+    const datosHojaVida = await obtenerDatosHojaVida();
+    
+    const response = await api.post('/pdf/generar', datosHojaVida, {
+      responseType: 'blob'
+    });
+    
+    // Crear y descargar el archivo
+    const blob = new Blob([response.data], { type: 'application/pdf' });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `hoja-de-vida-${nombre.value}.pdf`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.URL.revokeObjectURL(url);
+    
+    console.log('PDF generado exitosamente desde el backend');
+    
+  } catch (error) {
+    console.error('Error generando PDF desde backend:', error);
+    
+    // Si es error 423 (bloqueado), mostrar modal de desbloqueo
+    if (error.response?.status === 423) {
+      const errorData = error.response.data;
+      
+      if (errorData?.showUnlockModal && errorData?.userInfo) {
+        // Actualizar información del usuario desde el backend
+        usuarioId.value = errorData.userInfo.usuarioId;
+        mostrarModalLimite.value = true;
+      } else {
+        // Fallback al modal local
+        mostrarModalLimite.value = true;
+      }
+      return;
+    }
+    
+    // Para otros errores, mostrar alerta
+    alert(error.response?.data?.error || 'Error al generar el PDF');
+    
+  } finally {
+    generando.value = false;
+  }
+}
+
+async function obtenerDatosHojaVida() {
+  try {
+    // Intentar obtener datos de la API
+    const response = await api.get('/hoja-vida');
+    return response.data;
+  } catch (error) {
+    console.warn('No se pudieron obtener datos del backend, usando datos locales');
+    
+    // Fallback: usar datos del localStorage o valores por defecto
+    const datosPersonales = JSON.parse(localStorage.getItem('datosPersonales') || '{}');
+    const formacionAcademica = JSON.parse(localStorage.getItem('formacionAcademica') || '[]');
+    const experiencia = JSON.parse(localStorage.getItem('experiencia') || '[]');
+    
+    return {
+      datosPersonales,
+      formacionAcademica,
+      experiencia,
+      experienciaTot: experiencia // Usar la misma experiencia como total
+    };
+  }
+}
+
+// Función actualizada para manejar el click del botón
+function manejarClickBoton() {
+  if (limiteAlcanzado.value) {
+    mostrarModalLimite.value = true;
+  } else {
+    // Intentar generar PDF desde el backend primero
+    generarPDFBackend().catch(() => {
+      // Si falla el backend, usar el método local
+      console.log('Fallback a generación local de PDF');
+      generarPDF();
+    });
+  }
+}
+
+// Función actualizada para verificar código
+async function verificarCodigo() {
+  if (!codigoDesbloqueo.value.trim()) {
+    mostrarMensajeVerificacion('Por favor ingrese un código de desbloqueo', true);
+    return;
+  }
+  
+  verificandoCodigo.value = true;
+  mensajeVerificacion.value = '';
+  
+  try {
+    const code = codigoDesbloqueo.value.trim();
+    
+    // Obtener información del usuario autenticado
+    let backendUsuarioId = null;
+    let nombreUsuario = nombre.value;
+    
+    try {
+      const authUser = JSON.parse(localStorage.getItem('usuario') || '{}');
+      backendUsuarioId = authUser?.uid || null;
+      nombreUsuario = authUser?.nombre || nombre.value;
+    } catch (e) {
+      console.warn('No se pudo obtener información del usuario autenticado');
+    }
+
+    const respuesta = await verifyUnlockCode({
+      code,
+      usuarioId: backendUsuarioId,
+      nombre: nombreUsuario,
+    });
+    
+    if (respuesta?.ok) {
+      // Resetear tanto el contador local como notificar el éxito
+      if (respuesta.resetDownloads) {
+        descargasUsadas.value = 0;
+        await guardarContadorUsuario();
+      }
+      
+      const scope = respuesta.scope || 'user';
+      const scopeText = scope === 'master' ? 'administrador' : 'usuario';
+      
+      mostrarMensajeVerificacion(
+        `¡Código ${scopeText} válido! Se han restablecido las descargas.`, 
+        false
+      );
+      
+      setTimeout(() => {
+        cerrarModal();
+      }, 2000);
+      
+    } else {
+      mostrarMensajeVerificacion('Código inválido o expirado', true);
+    }
+    
+  } catch (error) {
+    console.error('Error verificando código:', error);
+    
+    let mensaje = 'Error verificando el código';
+    
+    if (error?.response?.status === 401) {
+      mensaje = 'Código inválido o no autorizado';
+    } else if (error?.response?.status === 404) {
+      mensaje = 'Código no encontrado';
+    } else if (error?.response?.data?.message) {
+      mensaje = error.response.data.message;
+    }
+    
+    mostrarMensajeVerificacion(mensaje, true);
+    
+  } finally {
+    verificandoCodigo.value = false;
+    codigoDesbloqueo.value = '';
+  }
+}
 </script>
 
 <style>
@@ -1250,4 +1419,5 @@ if (typeof window !== 'undefined') {
     gap: 5px;
   }
 }
+
 </style>
