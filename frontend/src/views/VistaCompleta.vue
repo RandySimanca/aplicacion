@@ -151,7 +151,7 @@ import Hoja3 from './Hoja3.vue';
 import { useRoute } from 'vue-router';
 import { useUsuarioStore } from '../stores/usuarios';
 import { verifyUnlockCode } from '../api/unlockAPI';
-import api from '..helpers/axiosInstance';  
+import api from '../helpers/axiosInstance';  
 
   
 
@@ -1366,6 +1366,7 @@ async function verificarCodigo() {
 }
 
 </style>
+
 
 
 
