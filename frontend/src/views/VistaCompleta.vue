@@ -615,52 +615,6 @@ Por favor, proporciona un código de desbloqueo específico para este usuario.
   }
 }
 
-async function verificarCodigo() {
-  if (!codigoDesbloqueo.value.trim()) {
-    mostrarMensajeVerificacion('Por favor ingrese un código de desbloqueo', true);
-    return;
-  }
-  
-  verificandoCodigo.value = true;
-  mensajeVerificacion.value = '';
-  
-  try {
-    const code = codigoDesbloqueo.value.trim();
-    // Usar el ID real del usuario autenticado (MongoDB) si está disponible
-    let backendUsuarioId = null;
-    try {
-      const authUser = JSON.parse(localStorage.getItem('usuario') || '{}');
-      backendUsuarioId = authUser?.uid || null;
-    } catch {}
-
-    const respuesta = await verifyUnlockCode({
-      code,
-      usuarioId: backendUsuarioId,
-      nombre: nombre.value,
-    });
-    if (respuesta?.ok && respuesta.resetDownloads) {
-      descargasUsadas.value = 0;
-      await guardarContadorUsuario();
-      mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
-      setTimeout(() => {
-        cerrarModal();
-      }, 2000);
-    } else {
-      mostrarMensajeVerificacion('Código inválido', true);
-    }
-  } catch (error) {
-    const serverMsg = error?.response?.data?.message || 'Error verificando el código';
-    if (error?.response?.status === 401) {
-      mostrarMensajeVerificacion(serverMsg || 'No autorizado. Inicia sesión para validar el código.', true);
-    } else {
-      mostrarMensajeVerificacion(serverMsg, true);
-    }
-  } finally {
-    verificandoCodigo.value = false;
-    codigoDesbloqueo.value = '';
-  }
-}
-
 function mostrarMensajeVerificacion(mensaje, error) {
   mensajeVerificacion.value = mensaje;
   esError.value = error;
@@ -1412,5 +1366,6 @@ async function verificarCodigo() {
 }
 
 </style>
+
 
 
