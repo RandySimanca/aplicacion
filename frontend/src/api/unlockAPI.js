@@ -1,7 +1,18 @@
-import api from "../helpers/axiosInstance";
+// frontend/src/api/unlockAPI.js
+import axios from 'axios';
 
-export async function verifyUnlockCode({ code, usuarioId, nombre }) {
-  const { data } = await api.post("/unlock/verify", { code, usuarioId, nombre });
-  return data; // { ok: boolean, scope: 'master'|'user', resetDownloads: true }
-}
+// Crear una instancia específica para unlock que NO use el token JWT
+const unlockAPI = axios.create({
+  baseURL: '/api',
+  timeout: 10000,
+});
 
+export const verifyUnlockCode = async (payload) => {
+  try {
+    const response = await unlockAPI.post('/unlock/verify', payload);
+    return response.data;
+  } catch (error) {
+    console.error('Error verificando código de desbloqueo:', error);
+    throw error;
+  }
+};
