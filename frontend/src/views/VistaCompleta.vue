@@ -157,7 +157,7 @@ const nombre = ref('Invitado');
 const route = useRoute();
 const usuarioStore = useUsuarioStore();
 
-// Sistema de contador de descargas por usuario
+// Sistema de contador INDIVIDUAL por usuario
 const limiteDescargas = ref(1);
 const descargasUsadas = ref(0);
 const mostrarModalLimite = ref(false);
@@ -173,7 +173,7 @@ const navegadorInfo = ref('');
 const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
 const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
 
-// Persistencia reforzada: IndexedDB para que el bloqueo perdure tras cerrar sesión
+// IndexedDB para persistencia individual
 let idbInstance = null;
 
 function abrirBD() {
@@ -182,7 +182,7 @@ function abrirBD() {
       resolve(idbInstance);
       return;
     }
-    const request = window.indexedDB.open('pdfLimiterDB', 1);
+    const request = window.indexedDB.open('pdfLimiterDB_Individual', 2);
     request.onupgradeneeded = (event) => {
       const db = event.target.result;
       if (!db.objectStoreNames.contains('userCounters')) {
@@ -231,74 +231,42 @@ async function idbGuardarContador(info) {
   }
 }
 
-async function idbRegistrarUsuario(registro) {
-  try {
-    const db = await abrirBD();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('usersRegistry', 'readwrite');
-      const store = tx.objectStore('usersRegistry');
-      const putReq = store.put(registro);
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    });
-  } catch (e) {
-    console.warn('IndexedDB no disponible para registrar usuario:', e);
-  }
-}
-
 onMounted(async () => {
-  await inicializarSistema();
+  await inicializarSistemaIndividual();
 });
 
 // Watcher para cambios en el nombre del usuario
 watch(nombre, async (nuevoNombre, nombreAnterior) => {
   if (nuevoNombre !== nombreAnterior && nuevoNombre !== 'Invitado') {
-    await actualizarSistemaUsuario();
+    await reinicializarUsuario();
   }
 });
 
-async function inicializarSistema() {
-  // Cargar datos del usuario desde localStorage
+async function inicializarSistemaIndividual() {
+  // 1. Cargar datos del usuario desde localStorage
   const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
   if (datos?.nombre) {
     nombre.value = datos.nombre;
   }
   
-  // Generar información del navegador
+  // 2. Generar información del navegador
   generarInfoNavegador();
   
-  // Generar ID único para el usuario actual - MODIFICADO PARA USAR ID PERSISTENTE
-  await generarUsuarioId();
+  // 3. Generar ID PERSISTENTE Y ÚNICO para el usuario actual
+  await generarUsuarioIdPersistente();
   
-  // Cargar contador de descargas específico del usuario
-  await cargarContadorUsuario();
+  // 4. Cargar SOLO el contador específico de este usuario
+  await cargarContadorIndividual();
+  
+  console.log(`Sistema inicializado para usuario: ${nombre.value} (ID: ${usuarioId.value})`);
 }
 
-async function actualizarSistemaUsuario() {
-  // Regenerar el ID de usuario cuando cambia el nombre (mantener persistencia)
-  const nombreAnterior = usuarioId.value;
-  await generarUsuarioId();
+async function reinicializarUsuario() {
+  // Regenerar el ID de usuario y cargar su contador específico
+  await generarUsuarioIdPersistente();
+  await cargarContadorIndividual();
   
-  // Si el ID cambió, migrar datos del ID anterior
-  if (nombreAnterior && nombreAnterior !== usuarioId.value) {
-    try {
-      const claveAnterior = `pdf_user_${nombreAnterior}`;
-      const datosAnteriores = localStorage.getItem(claveAnterior);
-      if (datosAnteriores) {
-        const info = JSON.parse(datosAnteriores);
-        descargasUsadas.value = info.usadas || 0;
-        limiteDescargas.value = info.limite || 1;
-        console.log(`Datos migrados de ID anterior: ${nombreAnterior} -> ${usuarioId.value}`);
-        
-        // Limpiar datos antiguos
-        localStorage.removeItem(claveAnterior);
-      }
-    } catch (error) {
-      console.error('Error migrando datos del ID anterior:', error);
-    }
-  }
-  
-  await cargarContadorUsuario();
+  console.log(`Usuario reinicializado: ${nombre.value} (ID: ${usuarioId.value})`);
 }
 
 function generarInfoNavegador() {
@@ -306,7 +274,6 @@ function generarInfoNavegador() {
     const userAgent = navigator.userAgent;
     const platform = navigator.platform;
     
-    // Extraer información básica del navegador
     let browserName = 'Unknown';
     if (userAgent.includes('Firefox')) browserName = 'Firefox';
     else if (userAgent.includes('Chrome')) browserName = 'Chrome';
@@ -319,99 +286,106 @@ function generarInfoNavegador() {
   }
 }
 
-async function generarUsuarioId() {
+async function generarUsuarioIdPersistente() {
   try {
-    // MODIFICADO: Usar el ID del store de usuario si está disponible
-    // Esto asegura que el ID persista entre sesiones
+    // MEJORADO: Crear un ID completamente único y persistente
+    
+    // Primero, intentar usar el ID del store si existe
     if (usuarioStore.user && usuarioStore.user.id) {
-      usuarioId.value = `user_${usuarioStore.user.id}`;
+      usuarioId.value = `STORE_${usuarioStore.user.id}_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}`;
       return;
     }
     
-    // Fallback: Crear un ID único basado en información persistente
-    const datosUsuario = {
+    // Crear un ID único basado en datos consistentes
+    const datosBase = {
       nombre: nombre.value.toLowerCase().trim(),
-      // Usamos información que persiste entre sesiones
-      userAgent: navigator.userAgent.substring(0, 50),
+      userAgent: navigator.userAgent.substring(0, 100), // Más específico
       language: navigator.language,
-      // No usar timestamp para que sea consistente entre sesiones
+      platform: navigator.platform,
+      screenResolution: `${screen.width}x${screen.height}`,
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
     };
     
-    const cadenaUsuario = JSON.stringify(datosUsuario);
-    usuarioId.value = await generarHashUsuario(cadenaUsuario);
+    const cadenaUnica = JSON.stringify(datosBase);
+    const hash = await generarHashSeguro(cadenaUnica);
+    
+    // Crear ID con prefijo del nombre para facilitar identificación
+    const nombreLimpio = nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const prefijo = nombreLimpio.substring(0, 4).padEnd(4, 'X');
+    
+    usuarioId.value = `USER_${prefijo}_${hash}`;
     
   } catch (error) {
-    console.error('Error generando ID de usuario:', error);
-    // Fallback simple - sin timestamp para persistencia
-    usuarioId.value = await generarHashUsuario(nombre.value);
+    console.error('Error generando ID persistente:', error);
+    // Fallback muy simple pero único
+    const fallback = `${nombre.value}_${Date.now()}`;
+    usuarioId.value = await generarHashSeguro(fallback);
   }
 }
 
-async function generarHashUsuario(texto) {
-  // Generar un hash determinístico pero único para el usuario
+async function generarHashSeguro(texto) {
+  // Generar un hash más seguro y consistente
   let hash = 0;
+  if (texto.length === 0) return 'DEFAULT';
+  
   for (let i = 0; i < texto.length; i++) {
     const char = texto.charCodeAt(i);
     hash = ((hash << 5) - hash) + char;
     hash = hash & hash; // Convertir a entero de 32 bits
   }
   
-  // Agregar el nombre como prefijo para hacer más legible el ID
-  const nombreLimpio = nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-  const hashStr = Math.abs(hash).toString(36).toUpperCase().padStart(6, '0');
-  
-  return `${nombreLimpio.substring(0, 4)}_${hashStr}`;
+  return Math.abs(hash).toString(36).toUpperCase().padStart(8, '0');
 }
 
-function obtenerClavesUsuario() {
-  const nombreSeguro = nombre.value.replace(/[^a-zA-Z0-9]/g, '_').toLowerCase();
-  
-  return {
-    principal: `pdf_user_${usuarioId.value}`,
-    backup: `pdf_backup_${usuarioId.value}`,
-    legacy: `pdf_legacy_${nombreSeguro}`,
-    global: `pdf_users_registry`
-  };
+function obtenerClaveUsuarioEspecifica() {
+  // CLAVE COMPLETAMENTE ESPECÍFICA para este usuario
+  return `PDF_USER_INDIVIDUAL_${usuarioId.value}`;
 }
 
-async function cargarContadorUsuario() {
+function obtenerClaveBackupUsuario() {
+  return `PDF_BACKUP_INDIVIDUAL_${usuarioId.value}`;
+}
+
+async function cargarContadorIndividual() {
   if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
-    // Si no hay usuario válido, usar valores por defecto
+    // Usuario no válido, usar valores por defecto
     descargasUsadas.value = 0;
     limiteDescargas.value = 1;
     return;
   }
   
-  const claves = obtenerClavesUsuario();
+  const claveEspecifica = obtenerClaveUsuarioEspecifica();
+  const claveBackup = obtenerClaveBackupUsuario();
   let contadorCargado = false;
   
-  // 1) Intentar cargar desde IndexedDB (persistente tras logout)
+  // 1. Intentar cargar desde IndexedDB
   try {
     const infoIdb = await idbObtenerContador(usuarioId.value);
-    if (infoIdb && infoIdb.usuarioId === usuarioId.value) {
-      // Validar aislamiento por usuario
+    if (infoIdb && infoIdb.usuarioId === usuarioId.value && infoIdb.nombre === nombre.value) {
       descargasUsadas.value = Math.max(0, infoIdb.usadas || 0);
       limiteDescargas.value = Math.max(1, infoIdb.limite || 1);
       contadorCargado = true;
-      console.log(`Contador (IDB) cargado para usuario: ${nombre.value} (${usuarioId.value})`);
+      console.log(`Contador IDB cargado: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
     }
   } catch (e) {
-    console.warn('Fallo carga desde IndexedDB, probando localStorage...');
+    console.warn('Error cargando desde IndexedDB:', e);
   }
   
-  // Intentar cargar desde la clave principal del usuario
+  // 2. Intentar cargar desde localStorage con clave específica
   if (!contadorCargado) {
     try {
-      const datos = localStorage.getItem(claves.principal);
+      const datos = localStorage.getItem(claveEspecifica);
       if (datos) {
         const info = JSON.parse(datos);
+        // VALIDACIÓN ESTRICTA: debe coincidir exactamente
         if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
           descargasUsadas.value = Math.max(0, info.usadas || 0);
           limiteDescargas.value = Math.max(1, info.limite || 1);
           contadorCargado = true;
-          console.log(`Contador (LS) cargado para usuario: ${nombre.value} (${usuarioId.value})`);
-          // Sincronizar a IndexedDB para persistencia robusta
-          await idbGuardarContador({ ...info });
+          console.log(`Contador LS cargado: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
+          
+          // Sincronizar con IndexedDB
+          await idbGuardarContador(info);
         }
       }
     } catch (error) {
@@ -419,19 +393,17 @@ async function cargarContadorUsuario() {
     }
   }
   
-  // Si no se pudo cargar, intentar con backup
+  // 3. Intentar backup
   if (!contadorCargado) {
     try {
-      const datosBackup = localStorage.getItem(claves.backup);
+      const datosBackup = localStorage.getItem(claveBackup);
       if (datosBackup) {
         const info = JSON.parse(datosBackup);
-        if (info.usuarioId === usuarioId.value) {
+        if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
           descargasUsadas.value = Math.max(0, info.usadas || 0);
           limiteDescargas.value = Math.max(1, info.limite || 1);
           contadorCargado = true;
-          console.log(`Contador cargado desde backup para: ${nombre.value}`);
-          // Sincronizar a IndexedDB para persistencia robusta
-          await idbGuardarContador({ ...info });
+          console.log(`Contador backup cargado: ${nombre.value}`);
         }
       }
     } catch (error) {
@@ -439,23 +411,22 @@ async function cargarContadorUsuario() {
     }
   }
   
-  // Si es la primera vez para este usuario, inicializar
+  // 4. Si es primera vez, inicializar SOLO para este usuario
   if (!contadorCargado) {
     descargasUsadas.value = 0;
     limiteDescargas.value = 1;
-    await guardarContadorUsuario();
-    await registrarUsuario();
-    console.log(`Nuevo usuario inicializado: ${nombre.value} (${usuarioId.value})`);
+    await guardarContadorIndividual();
+    console.log(`Nuevo usuario inicializado: ${nombre.value} (ID: ${usuarioId.value})`);
   }
   
   // Validar límites
   if (descargasUsadas.value > limiteDescargas.value) {
     descargasUsadas.value = limiteDescargas.value;
-    await guardarContadorUsuario();
+    await guardarContadorIndividual();
   }
 }
 
-async function guardarContadorUsuario() {
+async function guardarContadorIndividual() {
   if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
     return;
   }
@@ -466,43 +437,22 @@ async function guardarContadorUsuario() {
     usadas: descargasUsadas.value,
     limite: limiteDescargas.value,
     ultimaDescarga: new Date().toISOString(),
-    fechaCreacion: new Date().toISOString(),
     navegadorInfo: navegadorInfo.value,
-    version: '3.0' // Nueva versión para sistema por usuarios
+    version: '4.0_INDIVIDUAL'
   };
   
-  const claves = obtenerClavesUsuario();
+  const claveEspecifica = obtenerClaveUsuarioEspecifica();
+  const claveBackup = obtenerClaveBackupUsuario();
   
-  // Guardar en clave principal y backup
   try {
-    localStorage.setItem(claves.principal, JSON.stringify(info));
-    localStorage.setItem(claves.backup, JSON.stringify(info));
+    // Guardar en ambas ubicaciones + IndexedDB
+    localStorage.setItem(claveEspecifica, JSON.stringify(info));
+    localStorage.setItem(claveBackup, JSON.stringify(info));
     await idbGuardarContador(info);
     
-    console.log(`Contador guardado para usuario: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
+    console.log(`Contador guardado individualmente: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
   } catch (error) {
-    console.error('Error guardando contador de usuario:', error);
-  }
-}
-
-async function registrarUsuario() {
-  // Mantener un registro de todos los usuarios para administración
-  try {
-    const claves = obtenerClavesUsuario();
-    const registro = JSON.parse(localStorage.getItem(claves.global) || '{}');
-    
-    registro[usuarioId.value] = {
-      nombre: nombre.value,
-      usuarioId: usuarioId.value,
-      fechaRegistro: new Date().toISOString(),
-      ultimaActividad: new Date().toISOString(),
-      navegadorInfo: navegadorInfo.value
-    };
-    
-    localStorage.setItem(claves.global, JSON.stringify(registro));
-    await idbRegistrarUsuario(registro[usuarioId.value]);
-  } catch (error) {
-    console.error('Error registrando usuario:', error);
+    console.error('Error guardando contador individual:', error);
   }
 }
 
@@ -515,7 +465,7 @@ function manejarClickBoton() {
 }
 
 async function generarPDF() {
-  // Verificar que tenemos un usuario válido
+  // Verificar usuario válido
   if (!nombre.value || nombre.value === 'Invitado') {
     alert('Por favor, asegúrate de que tu nombre de usuario esté configurado correctamente.');
     return;
@@ -548,13 +498,13 @@ async function generarPDF() {
       .from(documento.value)
       .save(nombreArchivo);
       
-    // Incrementar contador DESPUÉS de descarga exitosa
+    // Incrementar contador SOLO para este usuario
     descargasUsadas.value++;
-    await guardarContadorUsuario();
+    await guardarContadorIndividual();
     
-    console.log(`PDF generado exitosamente para ${nombre.value}. Descargas: ${descargasUsadas.value}/${limiteDescargas.value}`);
+    console.log(`PDF generado para ${nombre.value}. Contador: ${descargasUsadas.value}/${limiteDescargas.value}`);
     
-    // Si alcanzó el límite, mostrar modal
+    // Mostrar modal si alcanzó límite
     if (limiteAlcanzado.value) {
       setTimeout(() => {
         mostrarModalLimite.value = true;
@@ -632,34 +582,33 @@ async function verificarCodigo() {
   
   const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
   
-  // Códigos específicos por usuario (más seguros y específicos)
-  const codigoEspecificoUsuario = `UNLOCK_${usuarioId.value}_2024`;
-  const codigoEspecificoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_2024`;
+  // Códigos específicos para ESTE usuario únicamente
+  const codigoEspecificoCompleto = `UNLOCK_${usuarioId.value}_2024`;
+  const codigoEspecificoSimple = `USER_${usuarioId.value}`;
+  const codigoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_${usuarioId.value.slice(-4)}`;
   
-  const codigosValidos = [
-    'RANDYADMIN1208',
-    'MASTER_RESET_2024',
-    'EMERGENCY_UNLOCK',
-    codigoEspecificoUsuario,
-    codigoEspecificoNombre,
-    `USER_${usuarioId.value}` // Código alternativo más simple
+  const codigosValidosUsuario = [
+    'RANDYADMIN1208', // Código maestro del admin
+    'MASTER_RESET_2024', // Código maestro de emergencia
+    codigoEspecificoCompleto,
+    codigoEspecificoSimple,
+    codigoNombre
   ];
   
-  if (codigosValidos.includes(codigoIngresado)) {
-    // Código válido - resetear contador para este usuario específico
+  if (codigosValidosUsuario.includes(codigoIngresado)) {
+    // RESETEAR SOLO para este usuario específico
     descargasUsadas.value = 0;
-    await guardarContadorUsuario();
+    await guardarContadorIndividual();
     
-    // Log del desbloqueo para auditoría
-    console.log(`Desbloqueo exitoso para usuario: ${nombre.value} (${usuarioId.value}) con código: ${codigoIngresado}`);
+    console.log(`Desbloqueo INDIVIDUAL exitoso: ${nombre.value} (${usuarioId.value}) - Código: ${codigoIngresado}`);
     
-    mostrarMensajeVerificacion(`¡Código válido! Se han restablecido las descargas para ${nombre.value}.`, false);
+    mostrarMensajeVerificacion(`¡Código válido! Descargas restablecidas para ${nombre.value} únicamente.`, false);
     
     setTimeout(() => {
       cerrarModal();
     }, 2000);
   } else {
-    mostrarMensajeVerificacion(`Código inválido para el usuario ${nombre.value}. Tu ID es: ${usuarioId.value}`, true);
+    mostrarMensajeVerificacion(`Código inválido para ${nombre.value}. Tu ID específico es: ${usuarioId.value}`, true);
   }
   
   verificandoCodigo.value = false;
@@ -677,108 +626,58 @@ function mostrarMensajeVerificacion(mensaje, error) {
   }
 }
 
-// Funciones para desarrollo/testing
-function resetearContadorUsuario() {
+// Funciones de desarrollo - SOLO para este usuario
+function resetearContadorUsuarioActual() {
   if (import.meta.env.DEV) {
     descargasUsadas.value = 0;
-    guardarContadorUsuario();
-    console.log(`Contador reseteado para usuario: ${nombre.value} (${usuarioId.value})`);
+    guardarContadorIndividual();
+    console.log(`Contador reseteado INDIVIDUALMENTE para: ${nombre.value} (${usuarioId.value})`);
   }
 }
 
-function verTodosLosUsuarios() {
+function verInfoUsuarioActual() {
   if (import.meta.env.DEV) {
-    const usuarios = {};
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith('pdf_user_')) {
-        try {
-          const data = JSON.parse(localStorage.getItem(key));
-          usuarios[key] = data;
-        } catch (e) {
-          usuarios[key] = localStorage.getItem(key);
-        }
-      }
-    }
-    console.log('Usuarios registrados:', usuarios);
+    const claveEspecifica = obtenerClaveUsuarioEspecifica();
+    const datos = localStorage.getItem(claveEspecifica);
+    console.log('Usuario actual:', {
+      nombre: nombre.value,
+      id: usuarioId.value,
+      datos: datos ? JSON.parse(datos) : null,
+      descargasUsadas: descargasUsadas.value,
+      limite: limiteDescargas.value
+    });
+  }
+}
+
+function limpiarSoloUsuarioActual() {
+  if (import.meta.env.DEV) {
+    const claveEspecifica = obtenerClaveUsuarioEspecifica();
+    const claveBackup = obtenerClaveBackupUsuario();
     
-    // También mostrar el registro global
-    try {
-      const registro = JSON.parse(localStorage.getItem('pdf_users_registry') || '{}');
-      console.log('Registro global:', registro);
-    } catch (e) {
-      console.log('Sin registro global');
-    }
-  }
-}
-
-function limpiarDatosDesarrollo() {
-  if (import.meta.env.DEV) {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.includes('pdf_')) {
-        keys.push(key);
-      }
-    }
-    keys.forEach(key => localStorage.removeItem(key));
-    console.log('Datos de PDF limpiados:', keys);
+    localStorage.removeItem(claveEspecifica);
+    localStorage.removeItem(claveBackup);
+    
+    console.log(`Datos limpiados SOLO para: ${nombre.value} (${usuarioId.value})`);
     location.reload();
   }
 }
 
 // Exponer funciones para desarrollo
 if (import.meta.env.DEV) {
-  window.resetearContadorUsuarioPDF = resetearContadorUsuario;
-  window.verTodosLosUsuariosPDF = verTodosLosUsuarios;
-  window.limpiarDatosPDF = limpiarDatosDesarrollo;
-  window.usuarioActual = () => ({ nombre: nombre.value, id: usuarioId.value });
-  window.generarCodigoUsuario = () => `UNLOCK_${usuarioId.value}_2024`;
-}
-
-// Sistema de protección mejorado para múltiples usuarios
-if (typeof window !== 'undefined') {
-  const originalSetItem = localStorage.setItem;
-  const originalRemoveItem = localStorage.removeItem;
-  const originalClear = localStorage.clear;
-  
-  localStorage.setItem = function(key, value) {
-    // Permitir que cada usuario tenga sus propias claves
-    if (key.includes('pdf_user_') && !key.includes(usuarioId.value)) {
-      // Permitir que otros usuarios tengan sus propios contadores
-      return originalSetItem.call(this, key, value);
-    }
-    if (key.includes('pdf_') && !key.includes('user_') && !key.includes('users_registry')) {
-      console.warn('Intento de manipulación de datos PDF detectado');
-      return;
-    }
-    return originalSetItem.call(this, key, value);
-  };
-  
-  localStorage.removeItem = function(key) {
-    if (key.includes('pdf_') && !key.includes(usuarioId.value)) {
-      console.warn('Intento de eliminación de datos de otros usuarios detectado');
-      return;
-    }
-    return originalRemoveItem.call(this, key);
-  };
-  
-  localStorage.clear = function() {
-    console.warn('Intento de limpieza completa detectado');
-    const resultado = originalClear.call(this);
-    setTimeout(() => {
-      // Recargar solo el usuario actual, no afectar a otros
-      if (usuarioId.value && nombre.value) {
-        descargasUsadas.value = limiteDescargas.value; // Bloquear por seguridad
-        guardarContadorUsuario();
-      }
-    }, 100);
-    return resultado;
-  };
+  window.resetearUsuarioPDFActual = resetearContadorUsuarioActual;
+  window.verUsuarioPDFActual = verInfoUsuarioActual;
+  window.limpiarUsuarioPDFActual = limpiarSoloUsuarioActual;
+  window.usuarioPDFActual = () => ({ 
+    nombre: nombre.value, 
+    id: usuarioId.value,
+    descargas: `${descargasUsadas.value}/${limiteDescargas.value}`
+  });
+  window.generarCodigoParaUsuarioActual = () => `USER_${usuarioId.value}`;
 }
 </script>
 
 <style>
+/* Los estilos permanecen iguales */
 .pdf-root { 
   background: #fff; 
   padding: 0.3in; 
@@ -1250,4 +1149,4 @@ if (typeof window !== 'undefined') {
     gap: 5px;
   }
 }
-</style>
+  </style>
