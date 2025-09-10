@@ -5,7 +5,6 @@ import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 import fs from "fs";
-import Usuario from "./models/Usuario.js";
 
 // --- Importar rutas API ---
 import formacionAcademicaRoutes from "./routes/formacionAcademica.js";
@@ -18,8 +17,6 @@ import experienciaTotRoutes from "./routes/experienciaTot.js";
 import pdfRoutes from "./routes/pdf.js";
 import idiomasRoutes from "./routes/idiomas.js";
 import firmaServidorRoutes from "./routes/firmaServidor.js";
-import unlockRoutes from "./routes/unlock.js";
-import adminRoutes from "./routes/admin.js";
 
 
 dotenv.config();
@@ -36,30 +33,7 @@ if (!MONGODB_URI) {
   // No detenemos la ejecución para que el frontend pueda funcionar
 } else {
   mongoose.connect(MONGODB_URI)
-    .then(async () => {
-      console.log("✅ MongoDB conectado");
-      // Seed admin opcional
-      try {
-        const adminEmail = process.env.ADMIN_EMAIL;
-        const adminPassword = process.env.ADMIN_PASSWORD;
-        const adminNombre = process.env.ADMIN_NAME || "Administrador";
-        if (adminEmail && adminPassword) {
-          const existing = await Usuario.findOne({ email: adminEmail });
-          if (!existing) {
-            await new Usuario({ nombre: adminNombre, email: adminEmail, password: adminPassword, roles: ["admin"] }).save();
-            console.log("👑 Usuario admin creado por seed:", adminEmail);
-          } else if (!existing.roles.includes("admin")) {
-            existing.roles.push("admin");
-            await existing.save();
-            console.log("👑 Rol admin asignado a:", adminEmail);
-          }
-        } else {
-          console.log("ℹ️ Seed admin omitido: define ADMIN_EMAIL y ADMIN_PASSWORD");
-        }
-      } catch (e) {
-        console.error("Seed admin falló:", e?.message);
-      }
-    })
+    .then(() => console.log("✅ MongoDB conectado"))
     .catch((err) => console.error("❌ Error en MongoDB:", err.message));
 }
 
@@ -74,8 +48,6 @@ app.use("/api/pdf", pdfRoutes);
 app.use("/api", hojaRoutes); 
 app.use("/api/idiomas", idiomasRoutes);
 app.use("/api/firma-servidor", firmaServidorRoutes);
-app.use("/api/unlock", unlockRoutes);
-app.use("/api/admin", adminRoutes);
 
 // --- Configuración de frontend MEJORADA ---
 const __filename = fileURLToPath(import.meta.url);
