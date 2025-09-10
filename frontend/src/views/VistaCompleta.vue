@@ -151,6 +151,9 @@ import Hoja3 from './Hoja3.vue';
 import { useRoute } from 'vue-router';
 import { useUsuarioStore } from '../stores/usuarios';
 import { verifyUnlockCode } from '../api/unlockAPI';
+import api from '..helpers/axiosInstance';  
+
+  
 
 const documento = ref(null);
 const generando = ref(false);
@@ -780,10 +783,6 @@ if (typeof window !== 'undefined') {
 // Función actualizada para generar PDF con manejo del backend
 // Agregar esta función a VistaCompleta.vue
 
-import { verifyUnlockCode } from '../api/unlockAPI';
-import api from '../helpers/axiosInstance';
-
-// ... resto del código existente ...
 
 async function generarPDFBackend() {
   try {
@@ -1421,3 +1420,4 @@ async function verificarCodigo() {
 }
 
 </style>
+
