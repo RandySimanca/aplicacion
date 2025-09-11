@@ -29,7 +29,10 @@ export const guardarExperiencia = async (req, res) => {
 
 export const obtenerExperiencias = async (req, res) => {
   try {
-    const experiencias = await Experiencia.find({ user: req.user.id });
+    // Ordenar por createdAt descendente para que las más recientes aparezcan primero
+    const experiencias = await Experiencia.find({ user: req.user.id })
+      .sort({ createdAt: -1 });
+    
     return res.status(200).json(experiencias);
   } catch (error) {
     return res.status(500).json({ error: 'Error al obtener experiencias' });
