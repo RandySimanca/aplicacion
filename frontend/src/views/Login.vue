@@ -4,7 +4,7 @@
     <div class="contact-panel">
       <div class="contact-header">
         <div class="logo">
-          <div class="logo-icon">💼📑</div>
+          <div class="logo-icon">📑</div>
           <h1>Hoja de Vida en Formato Unico</h1>
         </div>
         <p class="tagline">Construye tu futuro profesional</p>
@@ -870,4 +870,5 @@ const handleRegister = async () => {
   }
 }
 </style>
+
 
