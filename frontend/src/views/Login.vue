@@ -50,8 +50,8 @@
           <li>📊 Estadísticas en tiempo real</li>
           <li>🎯 Optimizado para ATS</li>
         </ul>
-      </div>
-    </div> -->
+      </div>-->
+    </div> 
 
     <!-- Formulario de login -->
     <div class="login-card">
@@ -553,4 +553,5 @@ const handleRegister = async () => {
   }
 }
 </style>
+
 
