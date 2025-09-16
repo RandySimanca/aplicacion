@@ -164,7 +164,7 @@
         </div>
 
         <!-- Anuncios secundarios -->
-        <div class="secondary-ads">
+     <!--   <div class="secondary-ads">
           <div class="small-ad">
             <div class="ad-icon">📊</div>
             <div class="ad-text">
@@ -188,10 +188,10 @@
               <p>Conecta con recruiters y empresas</p>
             </div>
           </div>
-        </div>
+        </div> -->
 
         <!-- Testimonial -->
-        <div class="testimonial-ad">
+       <!-- <div class="testimonial-ad">
           <div class="quote">"Gracias a esta plataforma conseguí mi trabajo soñado en solo 2 semanas"</div>
           <div class="author">
             <div class="avatar">👨‍💼</div>
@@ -200,7 +200,7 @@
               <span>Ingeniero de Software</span>
             </div>
           </div>
-        </div>
+        </div> -->
 
         <!-- Banner publicitario externo (ejemplo) -->
         <div class="external-ad">
@@ -870,3 +870,4 @@ const handleRegister = async () => {
   }
 }
 </style>
+
