@@ -4,8 +4,8 @@
     <div class="contact-panel">
       <div class="contact-header">
         <div class="logo">
-          <div class="logo-icon">📑</div>
-          <h1>Hoja de Vida en Formato Unico</h1>
+          <div class="logo-icon">💼</div>
+          <h1>CVBuilder</h1>
         </div>
         <p class="tagline">Construye tu futuro profesional</p>
       </div>
@@ -16,33 +16,33 @@
           <span class="icon">📧</span>
           <div>
             <strong>Email</strong>
-            <p>randysimancamercado@gmail.com</p>
+            <p>soporte@cvbuilder.com</p>
           </div>
         </div>
-        <!--<div class="contact-item">
+        <div class="contact-item">
           <span class="icon">📱</span>
           <div>
             <strong>Teléfono</strong>
             <p>+57 (1) 234-5678</p>
           </div>
-        </div>-->
+        </div>
         <div class="contact-item">
           <span class="icon">💬</span>
           <div>
             <strong>WhatsApp</strong>
-            <p>+57 314 519 3285</p>
+            <p>+57 300 123 4567</p>
           </div>
         </div>
-       <!-- <div class="contact-item">
+        <div class="contact-item">
           <span class="icon">🌐</span>
-         <div>
+          <div>
             <strong>Sitio Web</strong>
             <p>www.cvbuilder.com</p>
           </div>
-        </div>-->
+        </div>
       </div>
 
-     <!-- <div class="features">
+      <div class="features">
         <h3>¿Por qué elegirnos?</h3>
         <ul>
           <li>✨ Plantillas profesionales</li>
@@ -50,8 +50,8 @@
           <li>📊 Estadísticas en tiempo real</li>
           <li>🎯 Optimizado para ATS</li>
         </ul>
-      </div>-->
-    </div> 
+      </div>
+    </div>
 
     <!-- Formulario de login -->
     <div class="login-card">
@@ -124,7 +124,7 @@
 
       <div class="form-footer">
         <p>
-          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿No tienes cuenta?" }}
+          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿Nuevo en CVBuilder?" }}
           <button @click="modoRegistro = !modoRegistro" class="toggle-btn">
             {{ modoRegistro ? "Iniciar sesión" : "Crear cuenta gratis" }}
           </button>
@@ -136,6 +136,79 @@
         <a href="#" class="link">¿Olvidaste tu contraseña?</a>
         <span class="separator">•</span>
         <a href="#" class="link">Términos y condiciones</a>
+      </div>
+    </div>
+
+    <!-- Panel publicitario -->
+    <div class="ads-panel">
+      <div class="ads-container">
+        <!-- Anuncio principal -->
+        <div class="main-ad">
+          <div class="ad-header">
+            <h3>🚀 Impulsa tu carrera</h3>
+            <span class="ad-badge">PREMIUM</span>
+          </div>
+          <div class="ad-content">
+            <p>Descubre herramientas exclusivas para crear CVs que destacan</p>
+            <ul class="benefits-list">
+              <li>✅ Plantillas premium exclusivas</li>
+              <li>✅ Análisis automático de ATS</li>
+              <li>✅ Sugerencias personalizadas</li>
+              <li>✅ Descargas ilimitadas</li>
+            </ul>
+            <button class="cta-btn">
+              Prueba Premium
+              <span class="price">$9.99/mes</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- Anuncios secundarios -->
+        <div class="secondary-ads">
+          <div class="small-ad">
+            <div class="ad-icon">📊</div>
+            <div class="ad-text">
+              <h4>Estadísticas</h4>
+              <p>Ve cuántas veces han visto tu CV</p>
+            </div>
+          </div>
+
+          <div class="small-ad">
+            <div class="ad-icon">🎯</div>
+            <div class="ad-text">
+              <h4>Match Jobs</h4>
+              <p>Encuentra empleos perfectos para tu perfil</p>
+            </div>
+          </div>
+
+          <div class="small-ad">
+            <div class="ad-icon">💼</div>
+            <div class="ad-text">
+              <h4>Red Profesional</h4>
+              <p>Conecta con recruiters y empresas</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Testimonial -->
+        <div class="testimonial-ad">
+          <div class="quote">"Gracias a esta plataforma conseguí mi trabajo soñado en solo 2 semanas"</div>
+          <div class="author">
+            <div class="avatar">👨‍💼</div>
+            <div class="author-info">
+              <strong>Carlos Rodríguez</strong>
+              <span>Ingeniero de Software</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Banner publicitario externo (ejemplo) -->
+        <div class="external-ad">
+          <div class="ad-placeholder">
+            <p>Espacio publicitario</p>
+            <small>320x250</small>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -232,8 +305,7 @@ const handleRegister = async () => {
 
 /* Panel de contacto */
 .contact-panel {
-  flex: 1;
-  max-width: 500px;
+  flex: 0 0 350px;
   padding: 3rem;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
@@ -338,14 +410,15 @@ const handleRegister = async () => {
 
 /* Formulario de login */
 .login-card {
-  flex: 1;
-  max-width: 500px;
+  flex: 0 0 400px;
   background: white;
   padding: 3rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
+  position: relative;
+  z-index: 2;
 }
 
 .form-header {
@@ -501,25 +574,285 @@ const handleRegister = async () => {
   text-decoration: underline;
 }
 
-.separator {
-  color: #cbd5e0;
+/* Panel publicitario */
+.ads-panel {
+  flex: 1;
+  background: #f8fafc;
+  padding: 2rem;
+  overflow-y: auto;
+  border-left: 1px solid #e2e8f0;
+}
+
+.ads-container {
+  max-width: 350px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  height: 100%;
+  justify-content: flex-start;
+  padding-top: 2rem;
+}
+
+/* Anuncio principal */
+.main-ad {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 2rem;
+  border-radius: 15px;
+  position: relative;
+  overflow: hidden;
+  box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+}
+
+.main-ad::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 100px;
+  height: 100px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  transform: translate(30px, -30px);
+}
+
+.ad-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.ad-header h3 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+}
+
+.ad-badge {
+  background: rgba(255, 255, 255, 0.2);
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  backdrop-filter: blur(10px);
+}
+
+.ad-content p {
+  margin-bottom: 1.5rem;
+  font-size: 1rem;
+  line-height: 1.5;
+  opacity: 0.9;
+}
+
+.benefits-list {
+  list-style: none;
+  padding: 0;
+  margin-bottom: 1.5rem;
+}
+
+.benefits-list li {
+  padding: 0.5rem 0;
+  font-size: 0.9rem;
+  opacity: 0.9;
+}
+
+.cta-btn {
+  width: 100%;
+  background: white;
+  color: #667eea;
+  border: none;
+  padding: 1rem;
+  border-radius: 10px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.cta-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.price {
+  background: #667eea;
+  color: white;
+  padding: 0.25rem 0.5rem;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+/* Anuncios secundarios */
+.secondary-ads {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.small-ad {
+  background: white;
+  padding: 1.5rem;
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+  border: 1px solid #e2e8f0;
+}
+
+.small-ad:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+}
+
+.ad-icon {
+  font-size: 2rem;
+  width: 50px;
+  height: 50px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 10px;
+  color: white;
+}
+
+.ad-text h4 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1rem;
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.ad-text p {
+  margin: 0;
+  font-size: 0.85rem;
+  color: #718096;
+  line-height: 1.4;
+}
+
+/* Testimonial */
+.testimonial-ad {
+  background: white;
+  padding: 2rem;
+  border-radius: 15px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  border-left: 4px solid #667eea;
+}
+
+.quote {
+  font-style: italic;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  line-height: 1.6;
+  font-size: 0.95rem;
+}
+
+.author {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.avatar {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.2rem;
+}
+
+.author-info strong {
+  display: block;
+  color: #2d3748;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.author-info span {
+  color: #718096;
+  font-size: 0.8rem;
+}
+
+/* Banner publicitario externo */
+.external-ad {
+  background: white;
+  border: 2px dashed #e2e8f0;
+  border-radius: 10px;
+  min-height: 250px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  color: #a0aec0;
+  transition: all 0.3s ease;
+}
+
+.external-ad:hover {
+  border-color: #cbd5e0;
+  background: #f7fafc;
+}
+
+.ad-placeholder p {
+  margin: 0 0 0.5rem 0;
+  font-weight: 600;
+  font-size: 1.1rem;
+}
+
+.ad-placeholder small {
+  font-size: 0.8rem;
 }
 
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1200px) {
   .login-wrapper {
     flex-direction: column;
   }
   
   .contact-panel {
-    max-width: none;
-    padding: 2rem;
+    flex: none;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   }
   
   .login-card {
+    flex: none;
     max-width: none;
+  }
+  
+  .ads-panel {
+    flex: none;
+    border-left: none;
+    border-top: 1px solid #e2e8f0;
+    max-height: 400px;
+  }
+  
+  .ads-container {
+    flex-direction: row;
+    overflow-x: auto;
+    padding-top: 1rem;
+  }
+  
+  .main-ad,
+  .secondary-ads,
+  .testimonial-ad,
+  .external-ad {
+    flex: 0 0 300px;
+  }
+}
+
+@media (max-width: 768px) {
+  .contact-panel,
+  .login-card,
+  .ads-panel {
     padding: 2rem;
   }
   
@@ -535,11 +868,24 @@ const handleRegister = async () => {
   .form-header h2 {
     font-size: 1.5rem;
   }
+  
+  .ads-container {
+    flex-direction: column;
+    max-height: none;
+  }
+  
+  .main-ad,
+  .secondary-ads,
+  .testimonial-ad,
+  .external-ad {
+    flex: none;
+  }
 }
 
 @media (max-width: 480px) {
   .contact-panel,
-  .login-card {
+  .login-card,
+  .ads-panel {
     padding: 1.5rem;
   }
   
@@ -553,6 +899,3 @@ const handleRegister = async () => {
   }
 }
 </style>
-
-
-
