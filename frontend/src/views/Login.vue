@@ -5,7 +5,7 @@
       <div class="contact-header">
         <div class="logo">
           <div class="logo-icon">💼</div>
-          <h1>CVBuilder</h1>
+          <h1>Hoja de Vida en Formato Unico</h1>
         </div>
         <p class="tagline">Construye tu futuro profesional</p>
       </div>
@@ -16,33 +16,33 @@
           <span class="icon">📧</span>
           <div>
             <strong>Email</strong>
-            <p>soporte@cvbuilder.com</p>
+            <p>randysimancamercado@gmail.com</p>
           </div>
         </div>
-        <div class="contact-item">
+        <!--<div class="contact-item">
           <span class="icon">📱</span>
           <div>
             <strong>Teléfono</strong>
             <p>+57 (1) 234-5678</p>
           </div>
-        </div>
+        </div>-->
         <div class="contact-item">
           <span class="icon">💬</span>
           <div>
             <strong>WhatsApp</strong>
-            <p>+57 300 123 4567</p>
+            <p>+57 314 519 3285</p>
           </div>
         </div>
-        <div class="contact-item">
+       <!-- <div class="contact-item">
           <span class="icon">🌐</span>
-          <div>
+         <div>
             <strong>Sitio Web</strong>
             <p>www.cvbuilder.com</p>
           </div>
-        </div>
+        </div>-->
       </div>
 
-      <div class="features">
+     <!-- <div class="features">
         <h3>¿Por qué elegirnos?</h3>
         <ul>
           <li>✨ Plantillas profesionales</li>
@@ -51,7 +51,7 @@
           <li>🎯 Optimizado para ATS</li>
         </ul>
       </div>
-    </div>
+    </div> -->
 
     <!-- Formulario de login -->
     <div class="login-card">
@@ -124,7 +124,7 @@
 
       <div class="form-footer">
         <p>
-          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿Nuevo en CVBuilder?" }}
+          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿No tienes cuenta?" }}
           <button @click="modoRegistro = !modoRegistro" class="toggle-btn">
             {{ modoRegistro ? "Iniciar sesión" : "Crear cuenta gratis" }}
           </button>
@@ -553,3 +553,4 @@ const handleRegister = async () => {
   }
 }
 </style>
+
