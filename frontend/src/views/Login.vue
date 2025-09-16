@@ -4,8 +4,8 @@
     <div class="contact-panel">
       <div class="contact-header">
         <div class="logo">
-          <div class="logo-icon">💼</div>
-          <h1>CVBuilder</h1>
+          <div class="logo-icon">💼📑</div>
+          <h1>Hoja de Vida en Formato Unico</h1>
         </div>
         <p class="tagline">Construye tu futuro profesional</p>
       </div>
@@ -16,33 +16,33 @@
           <span class="icon">📧</span>
           <div>
             <strong>Email</strong>
-            <p>soporte@cvbuilder.com</p>
+            <p>randysimancamercado@gmail.com</p>
           </div>
         </div>
-        <div class="contact-item">
+        <!--<div class="contact-item">
           <span class="icon">📱</span>
           <div>
             <strong>Teléfono</strong>
             <p>+57 (1) 234-5678</p>
           </div>
-        </div>
+        </div>-->
         <div class="contact-item">
           <span class="icon">💬</span>
           <div>
             <strong>WhatsApp</strong>
-            <p>+57 300 123 4567</p>
+            <p>+57 314 519 3285</p>
           </div>
         </div>
-        <div class="contact-item">
+       <!-- <div class="contact-item">
           <span class="icon">🌐</span>
-          <div>
+         <div>
             <strong>Sitio Web</strong>
             <p>www.cvbuilder.com</p>
           </div>
-        </div>
+        </div>-->
       </div>
 
-      <div class="features">
+     <!-- <div class="features">
         <h3>¿Por qué elegirnos?</h3>
         <ul>
           <li>✨ Plantillas profesionales</li>
@@ -50,8 +50,8 @@
           <li>📊 Estadísticas en tiempo real</li>
           <li>🎯 Optimizado para ATS</li>
         </ul>
-      </div>
-    </div>
+      </div>-->
+    </div> 
 
     <!-- Formulario de login -->
     <div class="login-card">
@@ -124,7 +124,7 @@
 
       <div class="form-footer">
         <p>
-          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿Nuevo en CVBuilder?" }}
+          {{ modoRegistro ? "¿Ya tienes una cuenta?" : "¿No tienes cuenta?" }}
           <button @click="modoRegistro = !modoRegistro" class="toggle-btn">
             {{ modoRegistro ? "Iniciar sesión" : "Crear cuenta gratis" }}
           </button>
@@ -303,9 +303,10 @@ const handleRegister = async () => {
   font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
-/* Panel de contacto */
+/* Panel de contacto - MANTIENE EL DISEÑO ORIGINAL */
 .contact-panel {
-  flex: 0 0 350px;
+  flex: 1;
+  max-width: 500px;
   padding: 3rem;
   background: rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
@@ -408,17 +409,16 @@ const handleRegister = async () => {
   border: 1px solid rgba(255, 255, 255, 0.2);
 }
 
-/* Formulario de login */
+/* Formulario de login - MANTIENE EL DISEÑO ORIGINAL */
 .login-card {
-  flex: 0 0 400px;
+  flex: 1;
+  max-width: 500px;
   background: white;
   padding: 3rem;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  box-shadow: 0 0 30px rgba(0, 0, 0, 0.1);
-  position: relative;
-  z-index: 2;
+  box-shadow: -10px 0 30px rgba(0, 0, 0, 0.1);
 }
 
 .form-header {
@@ -513,7 +513,7 @@ const handleRegister = async () => {
 }
 
 .error-message {
-  background: #fed7d7;
+  background: hsl(145, 85%, 79%);
   color: #c53030;
   padding: 1rem;
   border-radius: 8px;
@@ -574,24 +574,26 @@ const handleRegister = async () => {
   text-decoration: underline;
 }
 
-/* Panel publicitario */
+.separator {
+  color: #cbd5e0;
+}
+
+/* NUEVO PANEL PUBLICITARIO */
 .ads-panel {
   flex: 1;
+  max-width: 400px;
   background: #f8fafc;
   padding: 2rem;
   overflow-y: auto;
-  border-left: 1px solid #e2e8f0;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
 }
 
 .ads-container {
-  max-width: 350px;
-  margin: 0 auto;
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
   height: 100%;
   justify-content: flex-start;
-  padding-top: 2rem;
 }
 
 /* Anuncio principal */
@@ -626,7 +628,7 @@ const handleRegister = async () => {
 
 .ad-header h3 {
   margin: 0;
-  font-size: 1.5rem;
+  font-size: 1.3rem;
   font-weight: 700;
 }
 
@@ -641,7 +643,7 @@ const handleRegister = async () => {
 
 .ad-content p {
   margin-bottom: 1.5rem;
-  font-size: 1rem;
+  font-size: 0.9rem;
   line-height: 1.5;
   opacity: 0.9;
 }
@@ -653,8 +655,8 @@ const handleRegister = async () => {
 }
 
 .benefits-list li {
-  padding: 0.5rem 0;
-  font-size: 0.9rem;
+  padding: 0.4rem 0;
+  font-size: 0.8rem;
   opacity: 0.9;
 }
 
@@ -695,7 +697,7 @@ const handleRegister = async () => {
 
 .small-ad {
   background: white;
-  padding: 1.5rem;
+  padding: 1rem;
   border-radius: 10px;
   display: flex;
   align-items: center;
@@ -711,27 +713,27 @@ const handleRegister = async () => {
 }
 
 .ad-icon {
-  font-size: 2rem;
-  width: 50px;
-  height: 50px;
+  font-size: 1.5rem;
+  width: 40px;
+  height: 40px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: linear-gradient(135deg, #667eea, #764ba2);
-  border-radius: 10px;
+  border-radius: 8px;
   color: white;
 }
 
 .ad-text h4 {
   margin: 0 0 0.25rem 0;
-  font-size: 1rem;
+  font-size: 0.9rem;
   color: #2d3748;
   font-weight: 600;
 }
 
 .ad-text p {
   margin: 0;
-  font-size: 0.85rem;
+  font-size: 0.75rem;
   color: #718096;
   line-height: 1.4;
 }
@@ -739,7 +741,7 @@ const handleRegister = async () => {
 /* Testimonial */
 .testimonial-ad {
   background: white;
-  padding: 2rem;
+  padding: 1.5rem;
   border-radius: 15px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
   border-left: 4px solid #667eea;
@@ -750,7 +752,7 @@ const handleRegister = async () => {
   color: #2d3748;
   margin-bottom: 1rem;
   line-height: 1.6;
-  font-size: 0.95rem;
+  font-size: 0.85rem;
 }
 
 .author {
@@ -760,26 +762,26 @@ const handleRegister = async () => {
 }
 
 .avatar {
-  width: 40px;
-  height: 40px;
+  width: 35px;
+  height: 35px;
   background: linear-gradient(135deg, #667eea, #764ba2);
   border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 1.2rem;
+  font-size: 1rem;
 }
 
 .author-info strong {
   display: block;
   color: #2d3748;
-  font-size: 0.9rem;
+  font-size: 0.8rem;
   font-weight: 600;
 }
 
 .author-info span {
   color: #718096;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
 }
 
 /* Banner publicitario externo */
@@ -787,7 +789,7 @@ const handleRegister = async () => {
   background: white;
   border: 2px dashed #e2e8f0;
   border-radius: 10px;
-  min-height: 250px;
+  min-height: 200px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -804,7 +806,7 @@ const handleRegister = async () => {
 .ad-placeholder p {
   margin: 0 0 0.5rem 0;
   font-weight: 600;
-  font-size: 1.1rem;
+  font-size: 1rem;
 }
 
 .ad-placeholder small {
@@ -812,48 +814,29 @@ const handleRegister = async () => {
 }
 
 /* Responsive */
-@media (max-width: 1200px) {
+@media (max-width: 768px) {
   .login-wrapper {
     flex-direction: column;
   }
   
   .contact-panel {
-    flex: none;
+    max-width: none;
+    padding: 2rem;
     border-right: none;
     border-bottom: 1px solid rgba(255, 255, 255, 0.2);
   }
   
   .login-card {
-    flex: none;
     max-width: none;
-  }
-  
-  .ads-panel {
-    flex: none;
-    border-left: none;
-    border-top: 1px solid #e2e8f0;
-    max-height: 400px;
-  }
-  
-  .ads-container {
-    flex-direction: row;
-    overflow-x: auto;
-    padding-top: 1rem;
-  }
-  
-  .main-ad,
-  .secondary-ads,
-  .testimonial-ad,
-  .external-ad {
-    flex: 0 0 300px;
-  }
-}
-
-@media (max-width: 768px) {
-  .contact-panel,
-  .login-card,
-  .ads-panel {
     padding: 2rem;
+  }
+
+  .ads-panel {
+    max-width: none;
+    padding: 2rem;
+    border-left: none;
+    border-top: 1px solid rgba(255, 255, 255, 0.2);
+    max-height: 400px;
   }
   
   .logo {
@@ -867,18 +850,6 @@ const handleRegister = async () => {
   
   .form-header h2 {
     font-size: 1.5rem;
-  }
-  
-  .ads-container {
-    flex-direction: column;
-    max-height: none;
-  }
-  
-  .main-ad,
-  .secondary-ads,
-  .testimonial-ad,
-  .external-ad {
-    flex: none;
   }
 }
 
