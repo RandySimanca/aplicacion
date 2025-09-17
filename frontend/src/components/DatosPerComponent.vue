@@ -514,4 +514,16 @@ export default {
 
 <style scoped>
 /* estilos */
+  #municipio-corr {
+  width: 100%;
+  padding: 4px 8px;
+  box-sizing: border-box;
+  font-size: 14px;
+  white-space: nowrap;
+  overflow-x: auto;
+  text-overflow: ellipsis;
+  height: auto;
+}
+
+
 </style>
