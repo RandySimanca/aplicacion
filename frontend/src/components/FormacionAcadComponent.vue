@@ -637,7 +637,7 @@ export default {
 .form-control11 {
   width: 100%;
   padding: 3px; /* Reducido */
-  border: 1px solid #920404;
+  border: 1px;
   box-sizing: border-box;
 }
 
@@ -670,3 +670,4 @@ export default {
 
 
 </style>
+
