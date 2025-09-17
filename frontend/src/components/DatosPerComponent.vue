@@ -516,7 +516,7 @@ export default {
 /* estilos */
   #municipio-corr {
   width: 100%;
-  padding: 4px 8px;
+  padding: 0px 8px;
   box-sizing: border-box;
   font-size: 14px;
   white-space: nowrap;
@@ -527,4 +527,5 @@ export default {
 
 
 </style>
+
 
