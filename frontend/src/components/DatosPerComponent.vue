@@ -512,7 +512,7 @@ export default {
 };
 </script>
 
-<style scoped>
+<style>
 /* estilos */
   #municipio-corr {
   width: 100%;
@@ -527,3 +527,4 @@ export default {
 
 
 </style>
+
