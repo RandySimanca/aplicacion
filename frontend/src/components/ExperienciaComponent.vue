@@ -343,8 +343,10 @@ export default {
 }
 
 .col-pequeno {
-  flex: 0 0 10%;
-  max-width: 10%;
+    flex: 0 0 10% !important;
+    max-width: 20% !important;
+    margin-left: auto;
+    margin-right: auto;
 }
 
 .col-medio {
@@ -397,10 +399,12 @@ export default {
     max-width: 50% !important;
   }
   
-  .col-pequeno {
+ .col-pequeno {
     flex: 0 0 10% !important;
     max-width: 20% !important;
-  }
+    margin-left: auto;
+    margin-right: auto;
+}
   
   .col-medio {
     flex: 0 0 20% !important;
@@ -424,6 +428,7 @@ export default {
   }
 }
 </style>
+
 
 
 
