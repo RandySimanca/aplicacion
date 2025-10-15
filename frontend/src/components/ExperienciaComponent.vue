@@ -394,17 +394,17 @@ export default {
   /* Mantener las proporciones en impresión */
   .col-amplio {
     flex: 0 0 40% !important;
-    max-width: 40% !important;
+    max-width: 30% !important;
   }
   
   .col-pequeno {
     flex: 0 0 10% !important;
-    max-width: 10% !important;
+    max-width: 20% !important;
   }
   
   .col-medio {
     flex: 0 0 20% !important;
-    max-width: 20% !important;
+    max-width: 30% !important;
   }
   
   .col-3 {
@@ -424,3 +424,4 @@ export default {
   }
 }
 </style>
+
