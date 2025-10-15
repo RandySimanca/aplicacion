@@ -339,7 +339,7 @@ export default {
 /* Clases de columnas para pantalla normal */
 .col-amplio {
   flex: 0 0 40%;
-  max-width: 30%;
+  max-width: 50%;
 }
 
 .col-pequeno {
@@ -424,6 +424,7 @@ export default {
   }
 }
 </style>
+
 
 
 
