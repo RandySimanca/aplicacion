@@ -344,5 +344,36 @@ export default {
   width: 100%; /* o 90%, según el layout */
 }
 
-
+/* Estilos específicos para impresión */
+@media print {
+  .form-control {
+    width: 100% !important;
+    white-space: normal !important;
+    word-wrap: break-word !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 22px !important;
+    padding: 2px 4px !important;
+    border: 1px solid #000 !important;
+    font-size: 10px !important;
+  }
+  
+  /* Asegurar que el input de empresa se vea completo */
+  .correo.input {
+    width: 100% !important;
+    overflow: visible !important;
+  }
+  
+  /* Ajustar columnas para mejor distribución en impresión */
+  .col-2 {
+    flex: 0 0 48% !important;
+    max-width: 48% !important;
+  }
+  
+  .form-row {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 4px !important;
+  }
+}
 </style>
