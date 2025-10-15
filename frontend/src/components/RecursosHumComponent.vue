@@ -29,7 +29,7 @@
           type="text"
           id="hr-date"
           :value="ciudadFecha"
-          placeholder="Ej: Bogotá, 13 de Mayo de 2025"
+          placeholder="Ej: Bogotá 13/05/2025"
           readonly
         />
       </div>
@@ -82,6 +82,10 @@ const exportarPDF = async () => {
 
   
   <style scoped>
-  /* Puedes agregar estilos si lo necesitas */
-  </style>
+ @media print {
+  ::placeholder {
+    color: transparent; /* Hace que el placeholder sea invisible */
+  }
+}
+
   
