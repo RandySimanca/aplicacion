@@ -8,7 +8,7 @@
         <div class="form-row">
           <div class="form-group col-2">
             <label>EMPRESA O ENTIDAD.</label>
-            <input type="text" v-model="experienciaLocal.empresa" class="form-control" />
+            <input type="text" v-model="experienciaLocal.empresa" class="form-control correo input" />
           </div>
 
           <div class="checkbox-group col-2">
@@ -343,5 +343,6 @@ export default {
 .correo-input {
   width: 100%; /* o 90%, según el layout */
 }
+
 
 </style>
