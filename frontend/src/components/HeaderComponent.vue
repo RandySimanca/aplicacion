@@ -15,7 +15,7 @@
         </div>
         <div class="form-group">
           <label for="entidad">Entidad Receptora:</label>
-          <input type="text" id="entidad" class="form-control3"/>
+          <input type="text" id="entidad" class="form-control45"/>
         </div>
       </div>
 </template>
@@ -32,6 +32,14 @@ export default {
 }
 </script>
 
-<style>
+<style scope>
+.form-control45 {
+  width: 100%;
+  padding: 0.75rem 1rem;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.25rem;
+  box-sizing: border-box;
+}
 
 </style>
