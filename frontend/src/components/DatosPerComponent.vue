@@ -185,7 +185,7 @@
           <label for="dm">D.M</label>
           <input type="text" id="dm" class="form-control2" 
             v-model="dm" 
-            placeholder="Distrito Militar"/>
+            placeholder=""/>
         </div>
       </div>
 
@@ -527,5 +527,6 @@ export default {
 
 
 </style>
+
 
 
