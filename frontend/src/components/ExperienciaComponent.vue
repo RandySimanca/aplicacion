@@ -341,40 +341,84 @@ export default {
 
 <style scoped>
 .correo-input {
-  width: 100%; /* o 90%, según el layout */
+  width: 100%;
+}
+
+/* Nuevas clases para mejor distribución de columnas */
+.col-amplio {
+  flex: 0 0 40%; /* 40% del ancho para EMPRESA */
+  max-width: 40%;
+}
+
+.col-pequeno {
+  flex: 0 0 10%; /* 10% para cada radio button */
+  max-width: 10%;
+}
+
+.col-medio {
+  flex: 0 0 20%; /* 20% para PAÍS */
+  max-width: 20%;
+}
+
+/* Ocultar texto de impresión en pantalla */
+.solo-impresion {
+  display: none;
 }
 
 /* Estilos específicos para impresión */
 @media print {
-  .form-control {
+  /* Ocultar inputs en impresión */
+  .solo-pantalla {
+    display: none !important;
+  }
+  
+  /* Mostrar texto plano en impresión */
+  .solo-impresion {
+    display: block !important;
     width: 100% !important;
-    white-space: normal !important;
-    word-wrap: break-word !important;
-    overflow: visible !important;
-    height: auto !important;
-    min-height: 22px !important;
     padding: 2px 4px !important;
+    border: 1px solid #000 !important;
+    font-size: 10px !important;
+    min-height: 22px !important;
+    box-sizing: border-box !important;
+    word-wrap: break-word !important;
+    white-space: normal !important;
+    line-height: 1.3 !important;
+    background-color: white !important;
+  }
+  
+  .texto-impresion {
+    padding: 3px 4px !important;
+    border: 1px solid #333 !important;
+    border-radius: 2px !important;
+    background-color: #fff !important;
+  }
+  
+  .form-control {
     border: 1px solid #000 !important;
     font-size: 10px !important;
   }
   
-  /* Asegurar que el input de empresa se vea completo */
-  .correo.input {
-    width: 100% !important;
-    overflow: visible !important;
+  /* Mantener las proporciones en impresión */
+  .col-amplio {
+    flex: 0 0 40% !important;
+    max-width: 40% !important;
   }
   
-  /* Ajustar columnas para mejor distribución en impresión */
-  .col-2 {
-    flex: 0 0 48% !important;
-    max-width: 48% !important;
+  .col-pequeno {
+    flex: 0 0 10% !important;
+    max-width: 10% !important;
+  }
+  
+  .col-medio {
+    flex: 0 0 20% !important;
+    max-width: 20% !important;
   }
   
   .form-row {
     display: flex !important;
     flex-wrap: wrap !important;
-    gap: 4px !important;
+    gap: 2px !important;
   }
 }
 </style>
-
