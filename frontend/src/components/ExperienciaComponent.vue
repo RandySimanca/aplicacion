@@ -394,7 +394,7 @@ export default {
   /* Mantener las proporciones en impresión */
   .col-amplio {
     flex: 0 0 40% !important;
-    max-width: 30% !important;
+    max-width: 50% !important;
   }
   
   .col-pequeno {
@@ -424,5 +424,6 @@ export default {
   }
 }
 </style>
+
 
 
