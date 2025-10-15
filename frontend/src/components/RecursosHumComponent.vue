@@ -88,5 +88,8 @@ const exportarPDF = async () => {
   }
 }
 
+<style>
+
   
+
 
