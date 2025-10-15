@@ -6,52 +6,52 @@
         <label>EMPLEO ACTUAL O CONTRATO ANTERIOR</label>
 
         <div class="form-row">
-          <div class="form-group col-2">
+          <div class="form-group col-amplio">
             <label>EMPRESA O ENTIDAD.</label>
-            <input type="text" v-model="experienciaLocal.empresa" class="form-control correo input" />
+            <input type="text" v-model="experienciaLocal.empresa" class="form-control correo-input solo-pantalla" />
+            <div class="texto-impresion solo-impresion">{{ experienciaLocal.empresa }}</div>
           </div>
 
-          <div class="checkbox-group col-2">
+          <div class="checkbox-group col-pequeno">
             <label>PUBLICA</label>
             <input type="radio" value="Publica" v-model="experienciaLocal.tipoEntidad" />
           </div>
 
-          <div class="checkbox-group col-2">
+          <div class="checkbox-group col-pequeno">
             <label>PRIVADA</label>
             <input type="radio" value="Privada" v-model="experienciaLocal.tipoEntidad" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-medio">
             <label>PAÍS</label>
             <input type="text" v-model="experienciaLocal.pais" class="form-control" />
           </div>
         </div>
 
         <div class="form-row">
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>DEPARTAMENTO</label>
             <input type="text" v-model="experienciaLocal.departamento" class="form-control" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>MUNICIPIO</label>
             <input type="text" v-model="experienciaLocal.municipio" class="form-control" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>CORREO ELECTRÓNICO ENTIDAD</label>
             <input type="email" v-model="experienciaLocal.correoEntidad" class="form-control correo-input" />
-
           </div>
         </div>
 
         <div class="form-row">
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>TELÉFONOS</label>
             <input type="text" v-model="experienciaLocal.telefonos" class="form-control" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>FECHA DE INGRESO</label>
             <div style="display: flex">
               <div class="form-group" style="width: 30px; margin-right: 5px">
@@ -69,7 +69,7 @@
             </div>
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>FECHA DE RETIRO</label>
             <div style="display: flex">
               <div class="form-group" style="width: 30px; margin-right: 5px">
@@ -89,17 +89,17 @@
         </div>
 
         <div class="form-row">
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>CARGO O CONTRATO ACTUAL</label>
             <input type="text" v-model="experienciaLocal.cargo" class="form-control" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>DEPENDENCIA</label>
             <input type="text" v-model="experienciaLocal.dependencia" class="form-control" />
           </div>
 
-          <div class="form-group col-2">
+          <div class="form-group col-3">
             <label>DIRECCIÓN</label>
             <input type="text" v-model="experienciaLocal.direccion" class="form-control" />
           </div>
@@ -143,7 +143,7 @@ export default {
   data() {
     return {
       experienciaLocal: {
-        _id: null, // Agregamos el ID para saber si es nueva o existente
+        _id: null,
         empresa: "",
         tipoEntidad: "",
         pais: "",
@@ -183,7 +183,6 @@ export default {
     },
 
     validarFechasCampos(f) {
-      // Solo validar si alguno está lleno; si todo vacío, se reporta como inválido
       if (!f) return { ok: false, msg: "Fechas incompletas" };
       const { dia, mes, anio } = f;
       if (!this.esNumeroEnRango(dia, 1, 31)) return { ok: false, msg: "El día debe estar entre 1 y 31" };
@@ -196,6 +195,7 @@ export default {
       const d = parseInt(dia, 10), m = parseInt(mes, 10), y = parseInt(anio, 10);
       return new Date(y, m - 1, d);
     },
+    
     normalizarFecha(fecha) {
       if (!fecha) return { dia: '', mes: '', anio: '' };
       if (typeof fecha === 'string' || fecha instanceof Date) {
@@ -219,13 +219,12 @@ export default {
       this.experienciaLocal = {
         ...this.experienciaLocal,
         ...exp,
-        _id: exp._id || null, // Guardar el ID si existe
+        _id: exp._id || null,
         fechaIngreso: this.normalizarFecha(exp.fechaIngreso),
         fechaRetiro: this.normalizarFecha(exp.fechaRetiro),
         datosPrecargados: true
       };
 
-      // Si tiene ID, es una experiencia existente (modo edición)
       this.modoEdicion = !!exp._id;
     },
 
@@ -240,7 +239,6 @@ export default {
     async guardarExperiencia() {
       this.cargando = true;
       try {
-        // Validaciones de fecha básicas
         const valIng = this.validarFechasCampos(this.experienciaLocal.fechaIngreso);
         if (!valIng.ok) {
           showError(`❌ Fecha de ingreso inválida: ${valIng.msg}`);
@@ -252,7 +250,6 @@ export default {
           return;
         }
 
-        // Comparación ingreso <= retiro
         const dIng = this.construirDate(this.experienciaLocal.fechaIngreso);
         const dRet = this.construirDate(this.experienciaLocal.fechaRetiro);
         if (dIng > dRet) {
@@ -269,16 +266,12 @@ export default {
         let response;
         
         if (this.modoEdicion && this.experienciaLocal._id) {
-          // Actualizar experiencia existente
-          
           response = await api.put(`/experiencia/${this.experienciaLocal._id}`, experienciaFormateada);
           showSuccess("✅ ¡Experiencia laboral actualizada correctamente.!");
         } else {
-          // Crear nueva experiencia
           response = await api.post("/experiencia", experienciaFormateada);
           showSuccess("✅ ¡Experiencia laboral guardada correctamente.!");
           
-          // Actualizar el ID local después de crear
           this.experienciaLocal._id = response.data.data._id;
           this.modoEdicion = true;
         }
@@ -318,7 +311,6 @@ export default {
         
         showSuccess("✅ Experiencia eliminada correctamente");
         
-        // Emitir evento para notificar al componente padre
         this.$emit('experiencia-eliminada', this.experienciaLocal._id);
         
         console.log("✅ Experiencia eliminada:", this.experienciaLocal._id);
@@ -344,20 +336,25 @@ export default {
   width: 100%;
 }
 
-/* Nuevas clases para mejor distribución de columnas */
+/* Clases de columnas para pantalla normal */
 .col-amplio {
-  flex: 0 0 40%; /* 40% del ancho para EMPRESA */
+  flex: 0 0 40%;
   max-width: 40%;
 }
 
 .col-pequeno {
-  flex: 0 0 10%; /* 10% para cada radio button */
+  flex: 0 0 10%;
   max-width: 10%;
 }
 
 .col-medio {
-  flex: 0 0 20%; /* 20% para PAÍS */
+  flex: 0 0 20%;
   max-width: 20%;
+}
+
+.col-3 {
+  flex: 0 0 32%;
+  max-width: 32%;
 }
 
 /* Ocultar texto de impresión en pantalla */
@@ -367,7 +364,7 @@ export default {
 
 /* Estilos específicos para impresión */
 @media print {
-  /* Ocultar inputs en impresión */
+  /* Ocultar inputs en impresión solo para el campo empresa */
   .solo-pantalla {
     display: none !important;
   }
@@ -377,26 +374,21 @@ export default {
     display: block !important;
     width: 100% !important;
     padding: 2px 4px !important;
-    border: 1px solid #000 !important;
+    border: 1px solid #333 !important;
+    border-radius: 2px !important;
     font-size: 10px !important;
-    min-height: 22px !important;
+    min-height: 20px !important;
     box-sizing: border-box !important;
     word-wrap: break-word !important;
     white-space: normal !important;
-    line-height: 1.3 !important;
+    line-height: 1.4 !important;
     background-color: white !important;
   }
   
-  .texto-impresion {
-    padding: 3px 4px !important;
-    border: 1px solid #333 !important;
-    border-radius: 2px !important;
-    background-color: #fff !important;
-  }
-  
   .form-control {
-    border: 1px solid #000 !important;
-    font-size: 10px !important;
+    border: 1px solid #333 !important;
+    font-size: 9px !important;
+    padding: 2px 3px !important;
   }
   
   /* Mantener las proporciones en impresión */
@@ -415,10 +407,20 @@ export default {
     max-width: 20% !important;
   }
   
+  .col-3 {
+    flex: 0 0 32% !important;
+    max-width: 32% !important;
+  }
+  
   .form-row {
     display: flex !important;
     flex-wrap: wrap !important;
     gap: 2px !important;
+    page-break-inside: avoid !important;
+  }
+  
+  .form-group {
+    page-break-inside: avoid !important;
   }
 }
 </style>
