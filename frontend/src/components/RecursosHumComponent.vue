@@ -29,7 +29,7 @@
           type="text"
           id="hr-date"
           :value="ciudadFecha"
-          placeholder="Ej: Bogotá 12/08/2025"
+          placeholder=""
           readonly
         />
       </div>
@@ -91,6 +91,7 @@ const exportarPDF = async () => {
 </style>
 
   
+
 
 
 
