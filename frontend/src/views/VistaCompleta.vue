@@ -1,1152 +1,824 @@
 <template>
-  <div>
-    <div id="documento-pdf" ref="documento" class="pdf-root" :class="{ 'generando-pdf': generando }">
-      <Hoja1 />
-      <Hoja2 />
-      <Hoja3 />
-    </div>
+    <div>
+      <!-- Selector de modo de generación -->
+      <div class="modo-selector">
+        <h4>Tipo de PDF</h4>
+        <label>
+          <input type="radio" v-model="modoGeneracion" value="html" />
+          <span>Diseño personalizado</span>
+        </label>
+        <label>
+          <input type="radio" v-model="modoGeneracion" value="oficial" />
+          <span>Formato oficial gobierno</span>
+        </label>
+      </div>
+  
+      <!-- Vista previa del diseño personalizado -->
+      <div
+        id="documento-pdf"
+        ref="documento"
+        class="pdf-root"
+        :class="{ 'generando-pdf': generando }"
+        v-show="modoGeneracion === 'html'"
+      >
+        <Hoja1 />
+        <Hoja2 />
+        <Hoja3 />
+      </div>
 
-    <!-- Botón de generar PDF -->
-    <button
-      class="pdf-button"
-      :disabled="generando"
-      :class="{ 'limite-alcanzado': limiteAlcanzado }"
-      :aria-busy="generando ? 'true' : 'false'"
-      @click="manejarClickBoton"
-      :title="limiteAlcanzado ? 'Click para ver opciones de desbloqueo' : 'Generar PDF'"
-    >
-      <span v-if="!generando && !limiteAlcanzado" class="btn-icon" aria-hidden="true">📄</span>
-      <span v-else-if="limiteAlcanzado" class="btn-icon" aria-hidden="true">🔒</span>
-      <span v-else class="spinner" aria-hidden="true"></span>
-      <span class="btn-text">
-        {{ 
-          limiteAlcanzado 
-            ? 'Generar PDF (Límite alcanzado)' 
-            : generando 
-              ? 'Generando...' 
-              : `Generar PDF (${descargasRestantes}/${limiteDescargas})`
-        }}
-      </span>
-    </button>
-
-    <!-- Modal de límite alcanzado -->
-    <div v-if="mostrarModalLimite" class="modal-overlay" @click="cerrarModal">
-      <div class="modal-content" @click.stop>
-        <div class="modal-header">
-          <h3>🔒 Límite de descargas alcanzado</h3>
-          <button @click="cerrarModal" class="close-btn">&times;</button>
+      <!-- ✅ NUEVA: Vista previa del formato oficial -->
+      <div v-show="modoGeneracion === 'oficial'" class="vista-previa-oficial">
+        <div class="controles-vista-previa">
+          <button 
+            @click="generarVistaPrevia" 
+            class="btn-previa"
+            :disabled="cargandoPrevia"
+          >
+            <span v-if="!cargandoPrevia">🔄 {{ urlPrevia ? 'Actualizar' : 'Generar' }} Vista Previa</span>
+            <span v-else>⏳ Generando...</span>
+          </button>
+          <button 
+            v-if="urlPrevia" 
+            @click="cerrarVistaPrevia" 
+            class="btn-cerrar-previa"
+          >
+            ❌ Cerrar Vista Previa
+          </button>
         </div>
-        <div class="modal-body">
-          <div class="limit-info">
-            <div class="limit-badge">
-              <span class="limit-number">{{ descargasUsadas }}</span>
-              <span class="limit-text">descargas utilizadas</span>
-            </div>
+
+        <div v-if="urlPrevia" class="contenedor-iframe">
+          <iframe 
+            :src="urlPrevia" 
+            class="iframe-pdf"
+            title="Vista previa del PDF oficial"
+          ></iframe>
+        </div>
+
+        <div v-else class="mensaje-sin-previa">
+          <div class="icono-documento">📄</div>
+          <h3>Vista previa del formato oficial</h3>
+          <p>Haz clic en "Generar Vista Previa" para ver cómo se verá tu hoja de vida en el formato oficial del gobierno.</p>
+          <p class="nota-info">💡 La vista previa no consume tus descargas disponibles</p>
+        </div>
+      </div>
+  
+      <!-- Botón de generar/descargar PDF -->
+      <button
+        class="pdf-button"
+        :disabled="generando"
+        :class="{ 'limite-alcanzado': limiteAlcanzado }"
+        :aria-busy="generando ? 'true' : 'false'"
+        @click="generarPDF"
+        :title="
+          limiteAlcanzado ? 'Click para ver opciones de contacto' : 'Generar PDF'
+        "
+      >
+        <span
+          v-if="!generando && !limiteAlcanzado"
+          class="btn-icon"
+          aria-hidden="true"
+          >📄</span
+        >
+        <span v-else-if="limiteAlcanzado" class="btn-icon" aria-hidden="true"
+          >🔒</span
+        >
+        <span v-else class="spinner" aria-hidden="true"></span>
+        <span class="btn-text">
+          {{
+            limiteAlcanzado
+              ? "Generar PDF (Límite alcanzado)"
+              : generando
+              ? "Generando..."
+              : `Descargar PDF (${descargasRestantes}/${limiteDescargas})`
+          }}
+        </span>
+      </button>
+  
+      <!-- Modal de límite alcanzado -->
+      <div v-if="mostrarModalLimite" class="modal-overlay" @click="cerrarModal">
+        <div class="modal-content" @click.stop>
+          <div class="modal-header">
+            <h3>🔒 Descargas en modo gratis alcanzado</h3>
+            <button @click="cerrarModal" class="close-btn">&times;</button>
           </div>
-          
-          <p class="main-message">Has alcanzado el límite máximo de descargas de tu hoja de vida en PDF.</p>
-          
-          <!-- Información de identificación del usuario -->
-          <div class="device-info">
-            <h4>👤 Información del usuario</h4>
-            <div class="device-details">
-              <div class="device-item">
-                <span class="device-label">Nombre de usuario:</span>
-                <span class="device-value">{{ nombre }}</span>
-              </div>
-              <div class="device-item">
-                <span class="device-label">ID único del usuario:</span>
-                <code class="device-value">{{ usuarioId }}</code>
-              </div>
-              <div class="device-item">
-                <span class="device-label">Navegador:</span>
-                <span class="device-value">{{ navegadorInfo }}</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="unlock-section">
-            <h4>🔓 Desbloquear descargas</h4>
-            <p>Ingresa el código de desbloqueo proporcionado por el administrador:</p>
-            
-            <div class="codigo-desbloqueo">
-              <div class="input-wrapper">
-                <input 
-                  type="text" 
-                  id="codigo-input" 
-                  v-model="codigoDesbloqueo" 
-                  placeholder="Código de desbloqueo" 
-                  class="codigo-input"
-                  @keyup.enter="verificarCodigo"
-                />
-                <button @click="verificarCodigo" class="btn-verificar" :disabled="!codigoDesbloqueo.trim()">
-                  <span v-if="verificandoCodigo" class="spinner-small"></span>
-                  <span v-else>Verificar</span>
-                </button>
-              </div>
-              <div v-if="mensajeVerificacion" class="mensaje-verificacion" :class="{ 'error': esError, 'success': !esError }">
-                {{ mensajeVerificacion }}
-              </div>
-            </div>
-          </div>
-          
-          <div class="contact-section">
-            <h4>📞 Contactar administrador</h4>
-            <p>Para obtener un código de desbloqueo, contacta al administrador proporcionando tu ID de usuario:</p>
-            
+          <div class="modal-body">
+            <p>
+              Has alcanzado el límite máximo de
+              <strong>{{ limiteDescargas }} descargas</strong> de tu hoja de vida
+              en PDF en el modo gratuito.
+            </p>
+            <p>
+              Para continuar descargando, contacta al administrador del sistema:
+            </p>
+  
             <div class="contact-info">
               <div class="contact-item">
-                <span class="contact-icon">👤</span>
+                <span class="contact-icon">🙋</span>
                 <span>Randy Simanca</span>
               </div>
               <div class="contact-item">
-                <span class="contact-icon">📱</span>
+                <span class="contact-icon">📞</span>
                 <span>+57 314 519 3285</span>
               </div>
               <div class="contact-item">
-                <span class="contact-icon">✉️</span>
+                <span class="contact-icon">📧</span>
                 <span>randysimancamercado@gmail.com</span>
               </div>
             </div>
+  
+            <div class="codigo-desbloqueo">
+              <label for="codigo-input">Código de desbloqueo:</label>
+              <input
+                type="text"
+                id="codigo-input"
+                v-model="codigoDesbloqueo"
+                placeholder="Ingrese el código proporcionado"
+                class="codigo-input"
+              />
+              <button @click="verificarCodigo" class="btn-verificar">
+                Verificar
+              </button>
+            </div>
+  
+            <p class="note">
+              El administrador podrá restablecer tu contador de descargas o
+              proporcionarte un código de desbloqueo.
+            </p>
           </div>
-          
-          <div class="note-section">
-            <p class="note">💡 Menciona tu ID de usuario y nombre al contactar al administrador para recibir un código específico.</p>
+          <div class="modal-footer">
+            <button @click="cerrarModal" class="btn-secondary">Cerrar</button>
+            <button @click="copiarContacto" class="btn-primary">
+              {{ textoCopiado ? "✓ Copiado" : "Copiar numero de contacto" }}
+            </button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button @click="cerrarModal" class="btn-secondary">Cerrar</button>
-          <button @click="copiarInfoCompleta" class="btn-primary">
-            {{ textoCopiado ? '✅ Copiado' : '📋 Copiar info completa' }}
-          </button>
+      </div>
+  
+      <!-- Contador visual -->
+      <div class="contador-info" v-if="!limiteAlcanzado">
+        <span class="contador-text"
+          >Descargas disponibles: {{ descargasRestantes }}</span
+        >
+        <div class="contador-barra">
+          <div
+            class="contador-progreso"
+            :style="{ width: `${(descargasUsadas / limiteDescargas) * 100}%` }"
+          ></div>
         </div>
       </div>
     </div>
-
-    <!-- Contador visual -->
-    <div class="contador-info" v-if="!limiteAlcanzado">
-      <div class="contador-header">
-        <span class="contador-text">Descargas disponibles</span>
-        <span class="contador-numeros">{{ descargasRestantes }}/{{ limiteDescargas }}</span>
-      </div>
-      <div class="contador-barra">
-        <div 
-          class="contador-progreso" 
-          :style="{ width: `${(descargasUsadas / limiteDescargas) * 100}%` }"
-        ></div>
-      </div>
-      <div class="usuario-actual">
-        <span class="usuario-text">Usuario: {{ nombre }}</span>
-      </div>
-    </div>
-  </div>
-</template>
-
-<script setup>
-import { ref, nextTick, computed, onMounted, watch } from 'vue';
-import html2pdf from 'html2pdf.js';
-import Hoja1 from './Hoja1.vue';
-import Hoja2 from './Hoja2.vue';
-import Hoja3 from './Hoja3.vue';
-import { useRoute } from 'vue-router';
-import { useUsuarioStore } from '../stores/usuarios';
-
-const documento = ref(null);
-const generando = ref(false);
-const nombre = ref('Invitado');
-const route = useRoute();
-const usuarioStore = useUsuarioStore();
-
-// Sistema de contador INDIVIDUAL por usuario
-const limiteDescargas = ref(1);
-const descargasUsadas = ref(0);
-const mostrarModalLimite = ref(false);
-const textoCopiado = ref(false);
-const codigoDesbloqueo = ref('');
-const mensajeVerificacion = ref('');
-const esError = ref(false);
-const verificandoCodigo = ref(false);
-const usuarioId = ref('');
-const navegadorInfo = ref('');
-
-// Computed properties
-const descargasRestantes = computed(() => limiteDescargas.value - descargasUsadas.value);
-const limiteAlcanzado = computed(() => descargasUsadas.value >= limiteDescargas.value);
-
-// IndexedDB para persistencia individual
-let idbInstance = null;
-
-function abrirBD() {
-  return new Promise((resolve, reject) => {
-    if (idbInstance) {
-      resolve(idbInstance);
-      return;
-    }
-    const request = window.indexedDB.open('pdfLimiterDB_Individual', 2);
-    request.onupgradeneeded = (event) => {
-      const db = event.target.result;
-      if (!db.objectStoreNames.contains('userCounters')) {
-        db.createObjectStore('userCounters', { keyPath: 'usuarioId' });
-      }
-      if (!db.objectStoreNames.contains('usersRegistry')) {
-        db.createObjectStore('usersRegistry', { keyPath: 'usuarioId' });
-      }
-    };
-    request.onsuccess = (event) => {
-      idbInstance = event.target.result;
-      resolve(idbInstance);
-    };
-    request.onerror = () => reject(request.error);
+  </template>
+  
+  <script setup>
+  import { ref, nextTick, computed, onMounted, onBeforeUnmount } from "vue";
+  import html2pdf from "html2pdf.js";
+  import { useFormatoOficialHV } from "../composables/useFormatoOficialHV";
+  import Hoja1 from "./Hoja1.vue";
+  import Hoja2 from "./Hoja2.vue";
+  import Hoja3 from "./Hoja3.vue";
+  import { useRoute } from "vue-router";
+  import { useUsuarioStore } from "../stores/usuarios";
+  import api from "../api/axios";
+  
+  const documento = ref(null);
+  const generando = ref(false);
+  const nombre = ref("Invitado");
+  const route = useRoute();
+  const usuarioStore = useUsuarioStore();
+  const modoGeneracion = ref("oficial");
+  
+  // ✅ NUEVAS: Variables para vista previa
+  const urlPrevia = ref(null);
+  const cargandoPrevia = ref(false);
+  
+  const { llenarFormatoOficial, descargarPDF, mapearDatosUsuario } = useFormatoOficialHV();
+  
+  // =========================
+  // 🔢 SISTEMA DE DESCARGAS
+  // =========================
+  const limiteDescargas = ref(10);
+  const descargasUsadas = ref(0);
+  const mostrarModalLimite = ref(false);
+  const textoCopiado = ref(false);
+  const codigoDesbloqueo = ref("");
+  
+  const descargasRestantes = computed(
+    () => limiteDescargas.value - descargasUsadas.value
+  );
+  const limiteAlcanzado = computed(
+    () => descargasUsadas.value >= limiteDescargas.value
+  );
+  
+  onMounted(() => {
+    const datos = JSON.parse(localStorage.getItem("usuario"));
+    if (datos?.nombre) nombre.value = datos.nombre;
+    cargarContadorDescargas();
   });
-}
 
-async function idbObtenerContador(usuarioIdClave) {
-  try {
-    const db = await abrirBD();
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction('userCounters', 'readonly');
-      const store = tx.objectStore('userCounters');
-      const getReq = store.get(usuarioIdClave);
-      getReq.onsuccess = () => resolve(getReq.result || null);
-      getReq.onerror = () => reject(getReq.error);
-    });
-  } catch (e) {
-    console.warn('IndexedDB no disponible para obtener contador:', e);
-    return null;
-  }
-}
-
-async function idbGuardarContador(info) {
-  try {
-    const db = await abrirBD();
-    await new Promise((resolve, reject) => {
-      const tx = db.transaction('userCounters', 'readwrite');
-      const store = tx.objectStore('userCounters');
-      const putReq = store.put(info);
-      putReq.onsuccess = () => resolve();
-      putReq.onerror = () => reject(putReq.error);
-    });
-  } catch (e) {
-    console.warn('IndexedDB no disponible para guardar contador:', e);
-  }
-}
-
-onMounted(async () => {
-  await inicializarSistemaIndividual();
-});
-
-// Watcher para cambios en el nombre del usuario
-watch(nombre, async (nuevoNombre, nombreAnterior) => {
-  if (nuevoNombre !== nombreAnterior && nuevoNombre !== 'Invitado') {
-    await reinicializarUsuario();
-  }
-});
-
-async function inicializarSistemaIndividual() {
-  // 1. Cargar datos del usuario desde localStorage
-  const datos = JSON.parse(localStorage.getItem('usuario') || '{}');
-  if (datos?.nombre) {
-    nombre.value = datos.nombre;
-  }
-  
-  // 2. Generar información del navegador
-  generarInfoNavegador();
-  
-  // 3. Generar ID PERSISTENTE Y ÚNICO para el usuario actual
-  await generarUsuarioIdPersistente();
-  
-  // 4. Cargar SOLO el contador específico de este usuario
-  await cargarContadorIndividual();
-  
-  console.log(`Sistema inicializado para usuario: ${nombre.value} (ID: ${usuarioId.value})`);
-}
-
-async function reinicializarUsuario() {
-  // Regenerar el ID de usuario y cargar su contador específico
-  await generarUsuarioIdPersistente();
-  await cargarContadorIndividual();
-  
-  console.log(`Usuario reinicializado: ${nombre.value} (ID: ${usuarioId.value})`);
-}
-
-function generarInfoNavegador() {
-  try {
-    const userAgent = navigator.userAgent;
-    const platform = navigator.platform;
-    
-    let browserName = 'Unknown';
-    if (userAgent.includes('Firefox')) browserName = 'Firefox';
-    else if (userAgent.includes('Chrome')) browserName = 'Chrome';
-    else if (userAgent.includes('Safari')) browserName = 'Safari';
-    else if (userAgent.includes('Edge')) browserName = 'Edge';
-    
-    navegadorInfo.value = `${platform} - ${browserName}`;
-  } catch (error) {
-    navegadorInfo.value = 'Navegador desconocido';
-  }
-}
-
-async function generarUsuarioIdPersistente() {
-  try {
-    // MEJORADO: Crear un ID completamente único y persistente
-    
-    // Primero, intentar usar el ID del store si existe
-    if (usuarioStore.user && usuarioStore.user.id) {
-      usuarioId.value = `STORE_${usuarioStore.user.id}_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}`;
-      return;
+  // ✅ LIMPIAR URL al desmontar componente
+  onBeforeUnmount(() => {
+    if (urlPrevia.value) {
+      URL.revokeObjectURL(urlPrevia.value);
     }
-    
-    // Crear un ID único basado en datos consistentes
-    const datosBase = {
-      nombre: nombre.value.toLowerCase().trim(),
-      userAgent: navigator.userAgent.substring(0, 100), // Más específico
-      language: navigator.language,
-      platform: navigator.platform,
-      screenResolution: `${screen.width}x${screen.height}`,
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+  });
+  
+  // =========================
+  // 🧮 CONTADOR LOCAL
+  // =========================
+  function cargarContadorDescargas() {
+    const usuario = JSON.parse(localStorage.getItem("usuario"));
+    const userId = usuario?.id || "anonimo";
+    const key = `descargas_pdf_${userId}`;
+    const datos = localStorage.getItem(key);
+    if (datos) {
+      const info = JSON.parse(datos);
+      descargasUsadas.value = info.usadas || 0;
+      limiteDescargas.value = info.limite || 10;
+    }
+  }
+  
+  function guardarContadorDescargas() {
+    const usuario = JSON.parse(localStorage.getItem("usuario"));
+    const userId = usuario?.id || "anonimo";
+    const key = `descargas_pdf_${userId}`;
+    const info = {
+      usadas: descargasUsadas.value,
+      limite: limiteDescargas.value,
+      ultimaDescarga: new Date().toISOString(),
     };
-    
-    const cadenaUnica = JSON.stringify(datosBase);
-    const hash = await generarHashSeguro(cadenaUnica);
-    
-    // Crear ID con prefijo del nombre para facilitar identificación
-    const nombreLimpio = nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-    const prefijo = nombreLimpio.substring(0, 4).padEnd(4, 'X');
-    
-    usuarioId.value = `USER_${prefijo}_${hash}`;
-    
-  } catch (error) {
-    console.error('Error generando ID persistente:', error);
-    // Fallback muy simple pero único
-    const fallback = `${nombre.value}_${Date.now()}`;
-    usuarioId.value = await generarHashSeguro(fallback);
-  }
-}
-
-async function generarHashSeguro(texto) {
-  // Generar un hash más seguro y consistente
-  let hash = 0;
-  if (texto.length === 0) return 'DEFAULT';
-  
-  for (let i = 0; i < texto.length; i++) {
-    const char = texto.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash; // Convertir a entero de 32 bits
+    localStorage.setItem(key, JSON.stringify(info));
   }
   
-  return Math.abs(hash).toString(36).toUpperCase().padStart(8, '0');
-}
-
-function obtenerClaveUsuarioEspecifica() {
-  // CLAVE COMPLETAMENTE ESPECÍFICA para este usuario
-  return `PDF_USER_INDIVIDUAL_${usuarioId.value}`;
-}
-
-function obtenerClaveBackupUsuario() {
-  return `PDF_BACKUP_INDIVIDUAL_${usuarioId.value}`;
-}
-
-async function cargarContadorIndividual() {
-  if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
-    // Usuario no válido, usar valores por defecto
-    descargasUsadas.value = 0;
-    limiteDescargas.value = 1;
-    return;
-  }
-  
-  const claveEspecifica = obtenerClaveUsuarioEspecifica();
-  const claveBackup = obtenerClaveBackupUsuario();
-  let contadorCargado = false;
-  
-  // 1. Intentar cargar desde IndexedDB
-  try {
-    const infoIdb = await idbObtenerContador(usuarioId.value);
-    if (infoIdb && infoIdb.usuarioId === usuarioId.value && infoIdb.nombre === nombre.value) {
-      descargasUsadas.value = Math.max(0, infoIdb.usadas || 0);
-      limiteDescargas.value = Math.max(1, infoIdb.limite || 1);
-      contadorCargado = true;
-      console.log(`Contador IDB cargado: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
-    }
-  } catch (e) {
-    console.warn('Error cargando desde IndexedDB:', e);
-  }
-  
-  // 2. Intentar cargar desde localStorage con clave específica
-  if (!contadorCargado) {
+  // =========================
+  // 📥 OBTENER DATOS COMPLETOS
+  // =========================
+  async function obtenerDatosCompletos() {
     try {
-      const datos = localStorage.getItem(claveEspecifica);
-      if (datos) {
-        const info = JSON.parse(datos);
-        // VALIDACIÓN ESTRICTA: debe coincidir exactamente
-        if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
-          descargasUsadas.value = Math.max(0, info.usadas || 0);
-          limiteDescargas.value = Math.max(1, info.limite || 1);
-          contadorCargado = true;
-          console.log(`Contador LS cargado: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
-          
-          // Sincronizar con IndexedDB
-          await idbGuardarContador(info);
-        }
-      }
-    } catch (error) {
-      console.error('Error cargando contador principal:', error);
-    }
-  }
+      console.log("📥 Obteniendo todos los datos desde la API...");
   
-  // 3. Intentar backup
-  if (!contadorCargado) {
-    try {
-      const datosBackup = localStorage.getItem(claveBackup);
-      if (datosBackup) {
-        const info = JSON.parse(datosBackup);
-        if (info.usuarioId === usuarioId.value && info.nombre === nombre.value) {
-          descargasUsadas.value = Math.max(0, info.usadas || 0);
-          limiteDescargas.value = Math.max(1, info.limite || 1);
-          contadorCargado = true;
-          console.log(`Contador backup cargado: ${nombre.value}`);
-        }
-      }
-    } catch (error) {
-      console.error('Error cargando backup:', error);
-    }
-  }
+      const [resDatos, resFormacion, resIdiomas, resExperiencia] = await Promise.all([
+        api.get("/datos-personales").catch(() => ({ data: {} })),
+        api.get("/formacion-academica").catch(() => ({ data: {} })),
+        api.get("/idiomas").catch(() => ({ data: { idiomas: [] } })),
+        api.get("/experiencia").catch(() => ({ data: [] }))
+      ]);
   
-  // 4. Si es primera vez, inicializar SOLO para este usuario
-  if (!contadorCargado) {
-    descargasUsadas.value = 0;
-    limiteDescargas.value = 1;
-    await guardarContadorIndividual();
-    console.log(`Nuevo usuario inicializado: ${nombre.value} (ID: ${usuarioId.value})`);
-  }
+      console.log("✅ Datos personales:", resDatos.data);
+      console.log("✅ Formación:", resFormacion.data);
+      console.log("✅ Idiomas:", resIdiomas.data);
+      console.log("✅ Experiencia:", resExperiencia.data);
   
-  // Validar límites
-  if (descargasUsadas.value > limiteDescargas.value) {
-    descargasUsadas.value = limiteDescargas.value;
-    await guardarContadorIndividual();
-  }
-}
-
-async function guardarContadorIndividual() {
-  if (!usuarioId.value || !nombre.value || nombre.value === 'Invitado') {
-    return;
-  }
+      console.log("🎯 gradoBasica desde API:", resFormacion.data?.gradoBasica);
+      console.log("🎯 Tipo de gradoBasica:", typeof resFormacion.data?.gradoBasica);
   
-  const info = {
-    usuarioId: usuarioId.value,
-    nombre: nombre.value,
-    usadas: descargasUsadas.value,
-    limite: limiteDescargas.value,
-    ultimaDescarga: new Date().toISOString(),
-    navegadorInfo: navegadorInfo.value,
-    version: '4.0_INDIVIDUAL'
-  };
+      const datosCompletos = {
+        ...resDatos.data,
+        gradoBasica: resFormacion.data?.gradoBasica,
+        tituloBachiller: resFormacion.data?.tituloBachiller || "Bachiller",
+        mesGrado: resFormacion.data?.mesGrado || "",
+        anioGrado: resFormacion.data?.anioGrado || "",
+        formacionesSuperior: resFormacion.data?.formacionesSuperior || [],
+        idiomas: resIdiomas.data?.idiomas || [],
+        experienciaLaboral: Array.isArray(resExperiencia.data)
+          ? resExperiencia.data
+          : (resExperiencia.data?.experiencia || []),
+      };
   
-  const claveEspecifica = obtenerClaveUsuarioEspecifica();
-  const claveBackup = obtenerClaveBackupUsuario();
-  
-  try {
-    // Guardar en ambas ubicaciones + IndexedDB
-    localStorage.setItem(claveEspecifica, JSON.stringify(info));
-    localStorage.setItem(claveBackup, JSON.stringify(info));
-    await idbGuardarContador(info);
-    
-    console.log(`Contador guardado individualmente: ${nombre.value} (${descargasUsadas.value}/${limiteDescargas.value})`);
-  } catch (error) {
-    console.error('Error guardando contador individual:', error);
-  }
-}
-
-function manejarClickBoton() {
-  if (limiteAlcanzado.value) {
-    mostrarModalLimite.value = true;
-  } else {
-    generarPDF();
-  }
-}
-
-async function generarPDF() {
-  // Verificar usuario válido
-  if (!nombre.value || nombre.value === 'Invitado') {
-    alert('Por favor, asegúrate de que tu nombre de usuario esté configurado correctamente.');
-    return;
-  }
-  
-  if (limiteAlcanzado.value) {
-    mostrarModalLimite.value = true;
-    return;
-  }
-
-  await nextTick();
-  await new Promise(r => setTimeout(r, 150));
-  generando.value = true;
-  
-  const opciones = {
-    margin: 0,
-    filename: 'hoja-de-vida.pdf',
-    image: { type: 'pdf', quality: 0.98 },
-    html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff' },
-    jsPDF: { unit: 'in', format: 'letter', orientation: 'portrait' },
-    pagebreak: { mode: ['avoid-all', 'css', 'legacy'] }
-  };
-  
-  try {
-    const nombreUsuario = nombre.value?.trim() || 'usuario';
-    const nombreArchivo = `hoja de vida ${nombreUsuario}.pdf`;
-    
-    await html2pdf()
-      .set(opciones)
-      .from(documento.value)
-      .save(nombreArchivo);
+      console.log("📦 Datos combinados:", datosCompletos);
+      console.log("🎯 gradoBasica en datos combinados:", datosCompletos.gradoBasica);
       
-    // Incrementar contador SOLO para este usuario
-    descargasUsadas.value++;
-    await guardarContadorIndividual();
-    
-    console.log(`PDF generado para ${nombre.value}. Contador: ${descargasUsadas.value}/${limiteDescargas.value}`);
-    
-    // Mostrar modal si alcanzó límite
+      return datosCompletos;
+    } catch (error) {
+      console.error("❌ Error obteniendo datos:", error);
+      throw new Error("No se pudieron cargar los datos de la base de datos");
+    }
+  }
+
+  // =========================
+  // 👁️ NUEVA: GENERAR VISTA PREVIA
+  // =========================
+  async function generarVistaPrevia() {
+    cargandoPrevia.value = true;
+    try {
+      console.log("👁️ Generando vista previa del PDF oficial...");
+      
+      // Limpiar URL anterior si existe
+      if (urlPrevia.value) {
+        URL.revokeObjectURL(urlPrevia.value);
+      }
+
+      const datosCompletos = await obtenerDatosCompletos();
+      const datosFormateados = mapearDatosUsuario(datosCompletos);
+      const pdfDoc = await llenarFormatoOficial(datosFormateados);
+      
+      // Generar el PDF como Blob
+      const pdfBytes = await pdfDoc.save();
+      const blob = new Blob([pdfBytes], { type: "application/pdf" });
+      
+      // Crear URL para el iframe
+      urlPrevia.value = URL.createObjectURL(blob);
+      
+      console.log("✅ Vista previa generada correctamente");
+    } catch (error) {
+      console.error("❌ Error generando vista previa:", error);
+      alert("Error al generar la vista previa. Por favor intente nuevamente.");
+    } finally {
+      cargandoPrevia.value = false;
+    }
+  }
+
+  function cerrarVistaPrevia() {
+    if (urlPrevia.value) {
+      URL.revokeObjectURL(urlPrevia.value);
+      urlPrevia.value = null;
+    }
+  }
+  
+  // =========================
+  // 🧾 GENERAR PDF (DESCARGA)
+  // =========================
+  async function generarPDF() {
     if (limiteAlcanzado.value) {
-      setTimeout(() => {
-        mostrarModalLimite.value = true;
-      }, 1500);
+      mostrarModalLimite.value = true;
+      return;
     }
-      
-  } catch (error) {
-    console.error('Error al generar PDF:', error);
-    alert('Error al generar el PDF. Por favor, inténtalo de nuevo.');
-  } finally {
-    generando.value = false;
-  }
-}
-
-function cerrarModal() {
-  mostrarModalLimite.value = false;
-  textoCopiado.value = false;
-  codigoDesbloqueo.value = '';
-  mensajeVerificacion.value = '';
-  esError.value = false;
-}
-
-async function copiarInfoCompleta() {
-  try {
-    const infoCompleta = `
-Solicitud de desbloqueo de PDF - Usuario Individual
-================================================
-Nombre del usuario: ${nombre.value}
-ID único del usuario: ${usuarioId.value}
-Navegador: ${navegadorInfo.value}
-Descargas usadas: ${descargasUsadas.value}/${limiteDescargas.value}
-
-Contacto del administrador:
-Randy Simanca
-+57 314 519 3285
-randysimancamercado@gmail.com
-
-Por favor, proporciona un código de desbloqueo específico para este usuario.
-    `.trim();
-    
-    await navigator.clipboard.writeText(infoCompleta);
-    textoCopiado.value = true;
-    setTimeout(() => {
-      textoCopiado.value = false;
-    }, 3000);
-  } catch (error) {
-    console.error('Error al copiar:', error);
-    // Fallback
-    const textoFallback = `Usuario: ${nombre.value} - ID: ${usuarioId.value} - Randy: +57 314 519 3285`;
+    generando.value = true;
     try {
-      const textArea = document.createElement('textarea');
-      textArea.value = textoFallback;
-      document.body.appendChild(textArea);
-      textArea.select();
-      document.execCommand('copy');
-      document.body.removeChild(textArea);
-      textoCopiado.value = true;
-      setTimeout(() => textoCopiado.value = false, 3000);
-    } catch (fallbackError) {
-      alert(`Usuario: ${nombre.value}\nID: ${usuarioId.value}\nTeléfono: +57 314 519 3285`);
+      if (modoGeneracion.value === "oficial") {
+        await generarPDFOficial();
+      } else {
+        await generarPDFHTML();
+      }
+      descargasUsadas.value++;
+      guardarContadorDescargas();
+      if (limiteAlcanzado.value) {
+        setTimeout(() => (mostrarModalLimite.value = true), 1000);
+      }
+    } catch (error) {
+      console.error("Error al generar PDF:", error);
+      alert("Error al generar el PDF. Por favor intente nuevamente.");
+    } finally {
+      generando.value = false;
     }
   }
-}
-
-async function verificarCodigo() {
-  if (!codigoDesbloqueo.value.trim()) {
-    mostrarMensajeVerificacion('Por favor ingrese un código de desbloqueo', true);
-    return;
+  
+  async function generarPDFHTML() {
+    await nextTick();
+    await new Promise((r) => setTimeout(r, 150));
+    const opciones = {
+      margin: 0,
+      filename: "hoja-de-vida.pdf",
+      image: { type: "pdf", quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, backgroundColor: "#ffffff" },
+      jsPDF: { unit: "in", format: "letter", orientation: "portrait" },
+      pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+    };
+    const nombreUsuario = nombre.value?.trim() || "usuario";
+    const nombreArchivo = `hoja de vida ${nombreUsuario}.pdf`;
+    await html2pdf().set(opciones).from(documento.value).save(nombreArchivo);
   }
   
-  verificandoCodigo.value = true;
-  mensajeVerificacion.value = '';
-  
-  await new Promise(r => setTimeout(r, 800));
-  
-  const codigoIngresado = codigoDesbloqueo.value.trim().toUpperCase();
-  
-  // Códigos específicos para ESTE usuario únicamente
-  const codigoEspecificoCompleto = `UNLOCK_${usuarioId.value}_2024`;
-  const codigoEspecificoSimple = `USER_${usuarioId.value}`;
-  const codigoNombre = `RESET_${nombre.value.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}_${usuarioId.value.slice(-4)}`;
-  
-  const codigosValidosUsuario = [
-    'RANDYADMIN1208', // Código maestro del admin
-    'MASTER_RESET_2024', // Código maestro de emergencia
-    codigoEspecificoCompleto,
-    codigoEspecificoSimple,
-    codigoNombre
-  ];
-  
-  if (codigosValidosUsuario.includes(codigoIngresado)) {
-    // RESETEAR SOLO para este usuario específico
-    descargasUsadas.value = 0;
-    await guardarContadorIndividual();
-    
-    console.log(`Desbloqueo INDIVIDUAL exitoso: ${nombre.value} (${usuarioId.value}) - Código: ${codigoIngresado}`);
-    
-    mostrarMensajeVerificacion(`¡Código válido! Descargas restablecidas para ${nombre.value} únicamente.`, false);
-    
-    setTimeout(() => {
-      cerrarModal();
-    }, 2000);
-  } else {
-    mostrarMensajeVerificacion(`Código inválido para ${nombre.value}. Tu ID específico es: ${usuarioId.value}`, true);
+  async function generarPDFOficial() {
+    try {
+      console.log("🚀 Iniciando generación de PDF oficial...");
+      const datosCompletos = await obtenerDatosCompletos();
+      const datosFormateados = mapearDatosUsuario(datosCompletos);
+      console.log("📋 Datos formateados para PDF:", datosFormateados);
+      const pdfDoc = await llenarFormatoOficial(datosFormateados);
+      const nombreUsuario = datosFormateados.nombres?.trim() || "usuario";
+      const apellido = datosFormateados.apellido1?.trim() || "";
+      const nombreArchivo = `Hoja_Vida_${nombreUsuario}_${apellido}.pdf`.replace(/\s+/g, "_");
+      await descargarPDF(pdfDoc, nombreArchivo);
+      console.log("✅ PDF generado y descargado exitosamente");
+    } catch (error) {
+      console.error("❌ Error generando PDF oficial:", error);
+      throw error;
+    }
   }
   
-  verificandoCodigo.value = false;
-  codigoDesbloqueo.value = '';
-}
-
-function mostrarMensajeVerificacion(mensaje, error) {
-  mensajeVerificacion.value = mensaje;
-  esError.value = error;
-  
-  if (error) {
-    setTimeout(() => {
-      mensajeVerificacion.value = '';
-    }, 8000);
-  }
-}
-
-// Funciones de desarrollo - SOLO para este usuario
-function resetearContadorUsuarioActual() {
-  if (import.meta.env.DEV) {
-    descargasUsadas.value = 0;
-    guardarContadorIndividual();
-    console.log(`Contador reseteado INDIVIDUALMENTE para: ${nombre.value} (${usuarioId.value})`);
-  }
-}
-
-function verInfoUsuarioActual() {
-  if (import.meta.env.DEV) {
-    const claveEspecifica = obtenerClaveUsuarioEspecifica();
-    const datos = localStorage.getItem(claveEspecifica);
-    console.log('Usuario actual:', {
-      nombre: nombre.value,
-      id: usuarioId.value,
-      datos: datos ? JSON.parse(datos) : null,
-      descargasUsadas: descargasUsadas.value,
-      limite: limiteDescargas.value
-    });
-  }
-}
-
-function limpiarSoloUsuarioActual() {
-  if (import.meta.env.DEV) {
-    const claveEspecifica = obtenerClaveUsuarioEspecifica();
-    const claveBackup = obtenerClaveBackupUsuario();
-    
-    localStorage.removeItem(claveEspecifica);
-    localStorage.removeItem(claveBackup);
-    
-    console.log(`Datos limpiados SOLO para: ${nombre.value} (${usuarioId.value})`);
-    location.reload();
-  }
-}
-
-// Exponer funciones para desarrollo
-if (import.meta.env.DEV) {
-  window.resetearUsuarioPDFActual = resetearContadorUsuarioActual;
-  window.verUsuarioPDFActual = verInfoUsuarioActual;
-  window.limpiarUsuarioPDFActual = limpiarSoloUsuarioActual;
-  window.usuarioPDFActual = () => ({ 
-    nombre: nombre.value, 
-    id: usuarioId.value,
-    descargas: `${descargasUsadas.value}/${limiteDescargas.value}`
-  });
-  window.generarCodigoParaUsuarioActual = () => `USER_${usuarioId.value}`;
-}
-</script>
-
-<style>
-/* Los estilos permanecen iguales */
-.pdf-root { 
-  background: #fff; 
-  padding: 0.3in; 
-}
-
-.carta { 
-  page-break-after: always; 
-}
-
-.carta:last-child { 
-  page-break-after: auto; 
-}
-
-.pdf-button {
-  position: fixed;
-  right: 24px;
-  bottom: 24px;
-  padding: 12px 18px;
-  min-width: 180px;
-  border-radius: 12px;
-  border: none;
-  outline: none;
-  cursor: pointer;
-  color: #fff;
-  background: linear-gradient(135deg, #3b82f6 0%, #1d4ed8 100%);
-  box-shadow: 0 8px 20px rgba(0,0,0,0.2);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  font-weight: 600;
-  letter-spacing: 0.2px;
-  transition: transform 0.15s ease, box-shadow 0.2s ease, opacity 0.2s ease;
-  z-index: 1000;
-}
-
-.pdf-button:hover:not(:disabled) { 
-  transform: translateY(-2px); 
-  box-shadow: 0 12px 24px rgba(0,0,0,0.25); 
-}
-
-.pdf-button:disabled { 
-  opacity: 0.75; 
-  cursor: not-allowed; 
-  transform: none; 
-  box-shadow: 0 8px 20px rgba(0,0,0,0.15); 
-}
-
-.pdf-button.limite-alcanzado {
-  background: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
-  cursor: pointer;
-  opacity: 1;
-}
-
-.pdf-button.limite-alcanzado:hover {
-  transform: translateY(-2px); 
-  box-shadow: 0 12px 24px rgba(239, 68, 68, 0.4);
-}
-
-.btn-icon { 
-  font-size: 18px; 
-  line-height: 1; 
-}
-
-.btn-text { 
-  font-size: 14px; 
-}
-
-.contador-info {
-  position: fixed;
-  right: 24px;
-  bottom: 90px;
-  background: rgba(255, 255, 255, 0.95);
-  backdrop-filter: blur(10px);
-  padding: 12px 16px;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-  font-size: 12px;
-  color: #666;
-  z-index: 999;
-  border: 1px solid rgba(255,255,255,0.2);
-}
-
-.contador-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 6px;
-}
-
-.contador-text {
-  font-weight: 500;
-  color: #374151;
-}
-
-.contador-numeros {
-  font-weight: 600;
-  color: #1f2937;
-  background: #f3f4f6;
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 11px;
-}
-
-.contador-barra {
-  width: 140px;
-  height: 6px;
-  background: #e5e7eb;
-  border-radius: 3px;
-  overflow: hidden;
-  margin-bottom: 8px;
-}
-
-.contador-progreso {
-  height: 100%;
-  background: linear-gradient(90deg, #10b981 0%, #059669 100%);
-  border-radius: 3px;
-  transition: width 0.3s ease;
-}
-
-.usuario-actual {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid #f3f4f6;
-}
-
-.usuario-text {
-  font-size: 11px;
-  color: #6b7280;
-}
-
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.6);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 10000;
-  padding: 20px;
-}
-
-.modal-content {
-  background: white;
-  border-radius: 12px;
-  width: 100%;
-  max-width: 600px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.2);
-  animation: modalFadeIn 0.3s ease;
-}
-
-@keyframes modalFadeIn {
-  from {
-    opacity: 0;
-    transform: translateY(-20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-.modal-header {
-  padding: 20px 25px;
-  border-bottom: 1px solid #eaeaea;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.modal-header h3 {
-  margin: 0;
-  color: #1f2937;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 1.5rem;
-  cursor: pointer;
-  color: #6b7280;
-  padding: 5px;
-  border-radius: 5px;
-}
-
-.close-btn:hover {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.modal-body {
-  padding: 25px;
-  line-height: 1.6;
-}
-
-.limit-info {
-  display: flex;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-
-.limit-badge {
-  background: #fef2f2;
-  color: #dc2626;
-  padding: 15px 25px;
-  border-radius: 10px;
-  text-align: center;
-  border: 1px solid #fecaca;
-}
-
-.limit-number {
-  font-size: 2rem;
-  font-weight: 700;
-  display: block;
-  line-height: 1;
-}
-
-.limit-text {
-  font-size: 0.9rem;
-  font-weight: 500;
-}
-
-.main-message {
-  text-align: center;
-  color: #374151;
-  margin: 20px 0;
-  font-size: 1.05rem;
-  line-height: 1.5;
-}
-
-.device-info, .unlock-section, .contact-section {
-  margin-bottom: 25px;
-  padding-bottom: 20px;
-  border-bottom: 1px solid #eaeaea;
-}
-
-.device-info h4, .unlock-section h4, .contact-section h4 {
-  margin: 0 0 15px;
-  color: #1f2937;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.device-details {
-  display: grid;
-  gap: 10px;
-}
-
-.device-item {
-  display: grid;
-  grid-template-columns: 140px 1fr;
-  align-items: center;
-}
-
-.device-label {
-  font-weight: 500;
-  color: #4b5563;
-  font-size: 0.9rem;
-}
-
-.device-value {
-  font-family: monospace;
-  background: #f3f4f6;
-  padding: 5px 10px;
-  border-radius: 5px;
-  font-size: 0.9rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.codigo-desbloqueo {
-  margin-top: 15px;
-}
-
-.input-wrapper {
-  display: flex;
-  gap: 10px;
-  margin-bottom: 10px;
-}
-
-.codigo-input {
-  flex: 1;
-  padding: 10px 14px;
-  border: 1px solid #d1d5db;
-  border-radius: 8px;
-  font-size: 0.95rem;
-  outline: none;
-  transition: border-color 0.2s;
-}
-
-.codigo-input:focus {
-  border-color: #3b82f6;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
-}
-
-.btn-verificar {
-  padding: 10px 16px;
-  background: #3b82f6;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: 500;
-  transition: background 0.2s;
-  white-space: nowrap;
-}
-
-.btn-verificar:hover:not(:disabled) {
-  background: #2563eb;
-}
-
-.btn-verificar:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
-}
-
-.spinner-small {
-  width: 16px;
-  height: 16px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 0.8s ease infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-.mensaje-verificacion {
-  padding: 10px 14px;
-  border-radius: 8px;
-  font-size: 0.9rem;
-  margin-top: 10px;
-}
-
-.mensaje-verificacion.success {
-  background: #ecfdf5;
-  color: #065f46;
-  border: 1px solid #a7f3d0;
-}
-
-.mensaje-verificacion.error {
-  background: #fef2f2;
-  color: #b91c1c;
-  border: 1px solid #fecaca;
-}
-
-.contact-info {
-  display: grid;
-  gap: 12px;
-  margin-top: 15px;
-}
-
-.contact-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 14px;
-  background: #f9fafb;
-  border-radius: 8px;
-}
-
-.contact-icon {
-  font-size: 1.1rem;
-  width: 20px;
-  text-align: center;
-}
-
-.note-section {
-  background: #eff6ff;
-  padding: 15px;
-  border-radius: 8px;
-  margin: 20px 0;
-}
-
-.note {
-  margin: 0;
-  color: #1e40af;
-  font-size: 0.95rem;
-}
-
-.modal-footer {
-  padding: 20px 25px;
-  border-top: 1px solid #eaeaea;
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-}
-
-.btn-secondary, .btn-primary {
-  padding: 10px 20px;
-  border-radius: 8px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
-  border: none;
-}
-
-.btn-secondary {
-  background: #f3f4f6;
-  color: #374151;
-}
-
-.btn-secondary:hover {
-  background: #e5e7eb;
-}
-
-.btn-primary {
-  background: #3b82f6;
-  color: white;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.btn-primary:hover {
-  background: #2563eb;
-}
-
-.spinner {
-  width: 18px;
-  height: 18px;
-  border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 50%;
-  border-top-color: white;
-  animation: spin 0.8s ease infinite;
-}
-
-.generando-pdf .no-imprimir {
-  display: none !important;
-}
-
-@media (max-width: 768px) {
-  .modal-content {
-    width: 95%;
-    margin: 1rem;
+  // =========================
+  // 🔐 FUNCIONES MODAL
+  // =========================
+  function cerrarModal() {
+    mostrarModalLimite.value = false;
+    textoCopiado.value = false;
   }
   
-  .modal-footer {
-    flex-direction: column;
+  async function copiarContacto() {
+    try {
+      await navigator.clipboard.writeText("3145193285");
+      textoCopiado.value = true;
+      setTimeout(() => (textoCopiado.value = false), 2000);
+    } catch (error) {
+      console.error("Error al copiar:", error);
+    }
   }
   
-  .contador-info {
-    right: 16px;
-    bottom: 80px;
+  async function verificarCodigo() {
+    if (codigoDesbloqueo.value.trim() === "") {
+      alert("Por favor ingrese un código de desbloqueo");
+      return;
+    }
+    try {
+      const response = await fetch("/api/codigo-desbloqueo/verificar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ codigo: codigoDesbloqueo.value.trim() }),
+      });
+      const data = await response.json();
+      if (response.ok) {
+        descargasUsadas.value = 0;
+        guardarContadorDescargas();
+        alert("¡Código válido! Se han restablecido tus descargas disponibles.");
+        cerrarModal();
+      } else {
+        alert(data.mensaje || "Código inválido. Intente nuevamente.");
+      }
+    } catch (error) {
+      console.error("Error al verificar código:", error);
+      alert("Error al verificar el código. Intente nuevamente.");
+    }
+    codigoDesbloqueo.value = "";
+  }
+  </script>
+  
+  <style scoped>
+  /* ========================================
+     ESTILOS EXISTENTES
+     ======================================== */
+  
+  .modo-selector {
+    margin-bottom: 20px;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+  }
+  
+  .modo-selector h4 {
+    margin-bottom: 10px;
+    color: #333;
+  }
+  
+  .modo-selector label {
+    display: flex;
+    align-items: center;
+    margin: 8px 0;
+    cursor: pointer;
+  }
+  
+  .modo-selector input[type="radio"] {
+    margin-right: 8px;
+  }
+  
+  .pdf-root {
+    margin-bottom: 20px;
+  }
+
+  /* ========================================
+     ✅ NUEVOS ESTILOS PARA VISTA PREVIA
+     ======================================== */
+
+  .vista-previa-oficial {
+    margin-bottom: 20px;
+  }
+
+  .controles-vista-previa {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    justify-content: center;
+  }
+
+  .btn-previa,
+  .btn-cerrar-previa {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 6px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+  }
+
+  .btn-previa {
+    background: #17a2b8;
+    color: white;
+  }
+
+  .btn-previa:hover:not(:disabled) {
+    background: #138496;
+    transform: translateY(-2px);
+  }
+
+  .btn-previa:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+
+  .btn-cerrar-previa {
+    background: #dc3545;
+    color: white;
+  }
+
+  .btn-cerrar-previa:hover {
+    background: #c82333;
+  }
+
+  .contenedor-iframe {
+    width: 100%;
+    height: 800px;
+    border: 2px solid #dee2e6;
+    border-radius: 8px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  }
+
+  .iframe-pdf {
+    width: 100%;
+    height: 100%;
+    border: none;
+  }
+
+  .mensaje-sin-previa {
+    text-align: center;
+    padding: 60px 20px;
+    background: #f8f9fa;
+    border: 2px dashed #dee2e6;
+    border-radius: 8px;
+  }
+
+  .icono-documento {
+    font-size: 80px;
+    margin-bottom: 20px;
+  }
+
+  .mensaje-sin-previa h3 {
+    color: #333;
+    margin-bottom: 15px;
+  }
+
+  .mensaje-sin-previa p {
+    color: #6c757d;
+    margin-bottom: 10px;
+    font-size: 16px;
+  }
+
+  .nota-info {
+    color: #17a2b8 !important;
+    font-weight: 600;
+    margin-top: 20px;
   }
   
   .pdf-button {
-    right: 16px;
-    bottom: 16px;
-    min-width: 160px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 12px 24px;
+    background: #007bff;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    width: 100%;
+    max-width: 400px;
+    margin: 0 auto;
   }
   
-  .device-item {
-    grid-template-columns: 1fr;
-    gap: 5px;
+  .pdf-button:hover:not(:disabled) {
+    background: #0056b3;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
   }
-}
+  
+  .pdf-button:disabled {
+    background: #6c757d;
+    cursor: not-allowed;
+    opacity: 0.6;
+  }
+  
+  .pdf-button.limite-alcanzado {
+    background: #dc3545;
+  }
+  
+  .pdf-button.limite-alcanzado:hover {
+    background: #c82333;
+  }
+  
+  .btn-icon {
+    font-size: 20px;
+  }
+  
+  .spinner {
+    width: 20px;
+    height: 20px;
+    border: 3px solid rgba(255, 255, 255, 0.3);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+  
+  /* Modal */
+  .modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+  }
+  
+  .modal-content {
+    background: white;
+    border-radius: 12px;
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+  }
+  
+  .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px;
+    border-bottom: 1px solid #e9ecef;
+  }
+  
+  .modal-header h3 {
+    margin: 0;
+    color: #333;
+  }
+  
+  .close-btn {
+    background: none;
+    border: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #6c757d;
+    line-height: 1;
+  }
+  
+  .close-btn:hover {
+    color: #dc3545;
+  }
+  
+  .modal-body {
+    padding: 20px;
+  }
+  
+  .modal-body p {
+    margin-bottom: 15px;
+    color: #555;
+  }
+  
+  .contact-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 8px;
+    margin: 15px 0;
+  }
+  
+  .contact-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px 0;
+  }
+  
+  .contact-icon {
+    font-size: 20px;
+  }
+  
+  .codigo-desbloqueo {
+    margin: 20px 0;
+  }
+  
+  .codigo-desbloqueo label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: #333;
+  }
+  
+  .codigo-input {
+    width: 100%;
+    padding: 10px;
+    border: 1px solid #ced4da;
+    border-radius: 4px;
+    margin-bottom: 10px;
+  }
+  
+  .btn-verificar {
+    width: 100%;
+    padding: 10px;
+    background: #28a745;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  
+  .btn-verificar:hover {
+    background: #218838;
+  }
+  
+  .note {
+    font-size: 14px;
+    color: #6c757d;
+    font-style: italic;
+  }
+  
+  .modal-footer {
+    display: flex;
+    gap: 10px;
+    padding: 20px;
+    border-top: 1px solid #e9ecef;
+  }
+  
+  .btn-secondary,
+  .btn-primary {
+    flex: 1;
+    padding: 10px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  
+  .btn-secondary {
+    background: #6c757d;
+    color: white;
+  }
+  
+  .btn-secondary:hover {
+    background: #5a6268;
+  }
+  
+  .btn-primary {
+    background: #007bff;
+    color: white;
+  }
+  
+  .btn-primary:hover {
+    background: #0056b3;
+  }
+  
+  /* Contador */
+  .contador-info {
+    margin-top: 20px;
+    text-align: center;
+  }
+  
+  .contador-text {
+    display: block;
+    margin-bottom: 8px;
+    color: #555;
+    font-weight: 600;
+  }
+  
+  .contador-barra {
+    width: 100%;
+    max-width: 400px;
+    height: 10px;
+    background: #e9ecef;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 0 auto;
+  }
+  
+  .contador-progreso {
+    height: 100%;
+    background: linear-gradient(90deg, #28a745, #ffc107, #dc3545);
+    transition: width 0.3s ease;
+  }
+
+  /* Responsive */
+  @media (max-width: 768px) {
+    .contenedor-iframe {
+      height: 600px;
+    }
+
+    .controles-vista-previa {
+      flex-direction: column;
+    }
+
+    .btn-previa,
+    .btn-cerrar-previa {
+      width: 100%;
+    }
+  }
   </style>
