@@ -4,7 +4,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 const connectDB = async () => {
-  const uri = process.env.MONGO_URI;
+  //const uri = process.env.MONGO_URI;
 
   // Validación previa del URI
   if (!uri) {
@@ -106,3 +106,4 @@ const connectDB = async () => {
 };
 
 export default connectDB;*/
+
